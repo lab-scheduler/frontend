@@ -1,0 +1,455 @@
+import React, { useEffect, useState } from 'react'
+import Card from '../components/Card'
+import LoadingSkeleton from '../components/LoadingSkeleton'
+import { apiFetch } from '../api/api'
+import { ORG_SLUG } from '../env'
+import { useAuth } from '../context/AuthContext'
+
+export default function DepartmentAndSkills() {
+  const { token } = useAuth()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [activeTab, setActiveTab] = useState('departments')
+
+  // Data states
+  const [departments, setDepartments] = useState([])
+  const [skills, setSkills] = useState([])
+
+  // Modal states
+  const [showDeptModal, setShowDeptModal] = useState(false)
+  const [showSkillModal, setShowSkillModal] = useState(false)
+  const [modalLoading, setModalLoading] = useState(false)
+  const [modalError, setModalError] = useState(null)
+
+  // Form states
+  const [deptForm, setDeptForm] = useState({
+    name: '',
+    description: '',
+    min_staff_per_shift: '',
+    max_staff_per_shift: ''
+  })
+
+  const [skillForm, setSkillForm] = useState({
+    department_id: '',
+    skill_name: '',
+    required_certification: ''
+  })
+
+  // Load data
+  useEffect(() => {
+    loadData()
+  }, [token])
+
+  async function loadData() {
+    setLoading(true)
+    setError(null)
+    try {
+      const [deptRes, skillRes] = await Promise.all([
+        apiFetch(`/api/v1/${ORG_SLUG}/departments`, {}, token),
+        apiFetch(`/api/v1/${ORG_SLUG}/skills`, {}, token)
+      ])
+
+      setDepartments(deptRes?.departments || deptRes || [])
+      setSkills(skillRes?.skills || skillRes || [])
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Department handlers
+  async function handleAddDepartment(e) {
+    e.preventDefault()
+    setModalLoading(true)
+    setModalError(null)
+
+    try {
+      const payload = {
+        name: deptForm.name,
+        description: deptForm.description,
+        min_staff_per_shift: parseInt(deptForm.min_staff_per_shift) || 1,
+        max_staff_per_shift: parseInt(deptForm.max_staff_per_shift) || 5
+      }
+
+      await apiFetch(`/api/v1/${ORG_SLUG}/departments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }, token)
+
+      setShowDeptModal(false)
+      setDeptForm({
+        name: '',
+        description: '',
+        min_staff_per_shift: '',
+        max_staff_per_shift: ''
+      })
+      loadData() // Reload data
+    } catch (err) {
+      setModalError(String(err))
+    } finally {
+      setModalLoading(false)
+    }
+  }
+
+  // Skills handlers
+  async function handleAddSkill(e) {
+    e.preventDefault()
+    setModalLoading(true)
+    setModalError(null)
+
+    try {
+      const payload = {
+        department_id: parseInt(skillForm.department_id) || null,
+        skill_name: skillForm.skill_name,
+        required_certification: skillForm.required_certification
+      }
+
+      await apiFetch(`/api/v1/${ORG_SLUG}/skills`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }, token)
+
+      setShowSkillModal(false)
+      setSkillForm({
+        department_id: '',
+        skill_name: '',
+        required_certification: ''
+      })
+      loadData() // Reload data
+    } catch (err) {
+      setModalError(String(err))
+    } finally {
+      setModalLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6 p-4">
+      <div>
+        <h1 className="text-3xl font-bold">Departments and Skills Management</h1>
+        <p className="text-gray-600 mt-1">Manage departments and skills for the organization</p>
+      </div>
+
+      {error && <div className="text-red-600 bg-red-50 p-2 rounded">{error}</div>}
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('departments')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'departments'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Departments
+          </button>
+          <button
+            onClick={() => setActiveTab('skills')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'skills'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Skills
+          </button>
+        </nav>
+      </div>
+
+      {/* Departments Tab */}
+      {activeTab === 'departments' && (
+        <Card>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Departments</h2>
+            <button
+              onClick={() => setShowDeptModal(true)}
+              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+            >
+              Add Department
+            </button>
+          </div>
+
+          {loading ? (
+            <LoadingSkeleton className="h-64 w-full" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Description
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Min Staff per Shift
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Max Staff per Shift
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {departments.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+                        No departments found
+                      </td>
+                    </tr>
+                  ) : (
+                    departments.map((dept) => (
+                      <tr key={dept.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {dept.name}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {dept.description || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {dept.min_staff_per_shift || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {dept.max_staff_per_shift || '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Skills Tab */}
+      {activeTab === 'skills' && (
+        <Card>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Skills</h2>
+            <button
+              onClick={() => setShowSkillModal(true)}
+              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+            >
+              Add Skill
+            </button>
+          </div>
+
+          {loading ? (
+            <LoadingSkeleton className="h-64 w-full" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Skill Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Department
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Required Certification
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {skills.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
+                        No skills found
+                      </td>
+                    </tr>
+                  ) : (
+                    skills.map((skill) => (
+                      <tr key={skill.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {skill.skill_name || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {skill.department_id ?
+                            departments.find(d => d.id === skill.department_id)?.name || `Dept ID: ${skill.department_id}`
+                            : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {skill.required_certification || '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Add Department Modal */}
+      {showDeptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black opacity-30" onClick={() => setShowDeptModal(false)} />
+          <div className="relative bg-white w-full max-w-md rounded shadow-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Add New Department</h3>
+
+            {modalError && <div className="text-red-600 bg-red-50 p-2 rounded mb-4">{modalError}</div>}
+
+            <form onSubmit={handleAddDepartment} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Department Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={deptForm.name}
+                  onChange={(e) => setDeptForm({...deptForm, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={deptForm.description}
+                  onChange={(e) => setDeptForm({...deptForm, description: e.target.value})}
+                  rows="3"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Min Staff per Shift
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={deptForm.min_staff_per_shift}
+                    onChange={(e) => setDeptForm({...deptForm, min_staff_per_shift: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Max Staff per Shift
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={deptForm.max_staff_per_shift}
+                    onChange={(e) => setDeptForm({...deptForm, max_staff_per_shift: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowDeptModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={modalLoading}
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {modalLoading ? 'Adding...' : 'Add Department'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Skill Modal */}
+      {showSkillModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black opacity-30" onClick={() => setShowSkillModal(false)} />
+          <div className="relative bg-white w-full max-w-md rounded shadow-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Add New Skill</h3>
+
+            {modalError && <div className="text-red-600 bg-red-50 p-2 rounded mb-4">{modalError}</div>}
+
+            <form onSubmit={handleAddSkill} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Department
+                </label>
+                <select
+                  value={skillForm.department_id}
+                  onChange={(e) => setSkillForm({...skillForm, department_id: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select a department (optional)</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Skill Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={skillForm.skill_name}
+                  onChange={(e) => setSkillForm({...skillForm, skill_name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Required Certification
+                </label>
+                <input
+                  type="text"
+                  value={skillForm.required_certification}
+                  onChange={(e) => setSkillForm({...skillForm, required_certification: e.target.value})}
+                  placeholder="e.g., Phlebotomy Certificate, BLS Certification"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter any required certifications for this skill</p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowSkillModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={modalLoading}
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {modalLoading ? 'Adding...' : 'Add Skill'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

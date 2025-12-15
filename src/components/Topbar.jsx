@@ -1,0 +1,160 @@
+import React, {useState} from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+
+export default function Topbar(){
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg">
+      <div className="px-4 py-4">
+        <div className="flex justify-between items-center">
+          {/* Logo */}
+          <Link to="/" className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-md">
+              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-white">Lab Scheduler</h1>
+          </Link>
+
+          {/* Mobile button */}
+          <button
+            onClick={()=>setOpen(!open)}
+            className="md:hidden p-2 rounded-lg hover:bg-white/20 transition-colors"
+          >
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={open ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+            </svg>
+          </button>
+
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center space-x-1">
+            {[
+              { to: "/", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
+              { to: "/leaves", label: "Leave Management", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" },
+              { to: "/staff", label: "Staff Management", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" },
+              { to: "/departments-skills", label: "Departments & Skills", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" },
+              { to: "/pipeline-generator", label: "Pipeline Generator", icon: "M13 10V3L4 14h7v7l9-11h-7z" }
+            ].map((item) => {
+              const isActive = location.pathname === item.to
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`group relative px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center space-x-2 ${
+                    isActive
+                      ? 'bg-white/20 text-white shadow-md'
+                      : 'text-white/90 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                  </svg>
+                  <span>{item.label}</span>
+                </Link>
+              )
+            })}
+          </nav>
+
+          {/* User Section */}
+          <div className="hidden md:flex items-center space-x-3">
+            {user ? (
+              <div className="flex items-center space-x-3">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-white">{user.username || user.employee_id}</p>
+                  <p className="text-xs text-white/70">{user.role}</p>
+                </div>
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <button
+                  onClick={()=>{logout();navigate('/login')}}
+                  className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white font-medium rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span>Logout</span>
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="px-4 py-2 bg-white text-indigo-600 font-medium rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                </svg>
+                <span>Login</span>
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile Dropdown */}
+        {open && (
+          <div className="md:hidden mt-4 pb-2 space-y-1">
+            {[
+              { to: "/", label: "Dashboard" },
+              { to: "/leaves", label: "Leave Management" },
+              { to: "/staff", label: "Staff Management" },
+              { to: "/departments-skills", label: "Departments & Skills" },
+              { to: "/pipeline-generator", label: "Pipeline Generator" }
+            ].map((item) => {
+              const isActive = location.pathname === item.to
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setOpen(false)}
+                  className={`block px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
+                    isActive
+                      ? 'bg-white/20 text-white font-medium'
+                      : 'text-white/90 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  {isActive && (
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </Link>
+              )
+            })}
+
+            <div className="pt-2 mt-2 border-t border-white/20">
+              {user ? (
+                <div className="px-4 pb-2">
+                  <p className="text-sm font-medium text-white mb-1">{user.username || user.employee_id}</p>
+                  <p className="text-xs text-white/70 mb-3">{user.role}</p>
+                  <button
+                    onClick={()=>{logout();navigate('/login');setOpen(false)}}
+                    className="w-full px-4 py-2 bg-white/20 hover:bg-white/30 text-white font-medium rounded-lg transition-colors"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  onClick={() => setOpen(false)}
+                  className="block px-4 py-2 bg-white text-indigo-600 font-medium rounded-lg text-center hover:bg-gray-100 transition-colors"
+                >
+                  Login
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
