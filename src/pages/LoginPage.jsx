@@ -13,7 +13,10 @@ export default function LoginPage(){
   async function submit(e){
     e.preventDefault()
     try{
-      const res = await apiFetch('/api/v1/auth/auth/login',{method:'POST', body: { identifier, password },})
+      const res = await apiFetch('/api/v1/auth/auth/login',{
+        method:'POST', 
+        body: { identifier, password, },
+      })
       const token = res.access_token || res.token
       if(!token) throw new Error('Invalid credentials')
       login(token)
