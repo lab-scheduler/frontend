@@ -649,6 +649,17 @@ export default function RotationDashboard(){
         <div className="px-6 py-8">
           {/* Executive Summary - 5 cards in a row */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            {loading ? (
+              // Loading skeletons for KPI cards
+              Array.from({length: 5}).map((_, i) => (
+                <div key={i} className="bg-white p-4 rounded shadow-sm animate-pulse">
+                  <div className="h-3 bg-gray-200 rounded w-3/4 mb-3"></div>
+                  <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                </div>
+              ))
+            ) : (
+              <>
             <div className="bg-white p-4 rounded shadow-sm relative">
               <div className="flex items-center justify-between">
                 <div>
@@ -703,6 +714,9 @@ export default function RotationDashboard(){
                 </ul>
             ) : (
               <div className="text-sm text-gray-600 mt-2">No critical issues detected</div>
+            )}
+            </div>
+              </>
             )}
           </div>
         </div>
@@ -895,7 +909,19 @@ export default function RotationDashboard(){
             <Card>
               <h3 className="font-semibold mb-4">Today's Shifts</h3>
               <div className="overflow-y-auto" style={{ height: '600px' }}>
-                  {useMemo(() => todayShifts.filter(s => {
+                  {loading ? (
+                    // Loading skeleton for today's shifts
+                    Array.from({length: 5}).map((_, i) => (
+                      <div key={i} className="border rounded-lg p-4 mb-3 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-1/4 mb-3"></div>
+                        <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+                        <div className="space-y-2">
+                          <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                    ))
+                  ) : useMemo(() => todayShifts.filter(s => {
                     // Apply department filter if selected
                     if(deptFilter === 'ALL') return true
                     const deptId = s?.department?.id ?? s?.department_id ?? s?.dept_id ?? (typeof s?.department === 'string' ? s.department : null)
@@ -959,13 +985,14 @@ export default function RotationDashboard(){
                     if(deptFilter === 'ALL') return true
                     const deptId = s?.department?.id ?? s?.department_id ?? s?.dept_id ?? (typeof s?.department === 'string' ? s.department : null)
                     return String(deptId) === String(deptFilter)
-                  }), [todayShifts, deptFilter]).length === 0 && (
+                  }), [todayShifts, deptFilter]).length === 0 && !loading && (
                     <div className="flex items-center justify-center h-64">
                       <div className="text-center">
                         <div className="text-gray-400 text-lg mb-2">No shifts scheduled</div>
                         <div className="text-sm text-gray-500">for today</div>
                       </div>
                     </div>
+                  )}
                   )}
                 </div>
             </Card>
