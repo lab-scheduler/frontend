@@ -14,14 +14,17 @@ export default function LoginPage(){
     e.preventDefault()
     try{
       const res = await apiFetch('/api/v1/auth/auth/login',{
-        method:'POST', 
-        body: { identifier, password, },
+        method:'POST',
+        body: JSON.stringify({ identifier, password }),
       })
       const token = res.access_token || res.token
       if(!token) throw new Error('Invalid credentials')
       login(token)
       navigate('/')
-    }catch(err){ setError(err.message) }
+    }catch(err){
+      console.error('Login error:', err)
+      setError(err.message || 'Login failed')
+    }
   }
 
   return (

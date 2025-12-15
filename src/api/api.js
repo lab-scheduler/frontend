@@ -13,6 +13,19 @@ export async function apiFetch(path, opts={}, token=null){
   }
 
   const res = await fetch(url, {...opts, headers})
+
+  // Handle 422 Unprocessable Entity specifically
+  if(res.status === 422) {
+    const errorText = await res.text()
+    console.error('422 Error Response:', errorText)
+    try {
+      const errorObj = JSON.parse(errorText)
+      throw new Error(`Invalid request format: ${errorObj.detail || errorText}`)
+    } catch {
+      throw new Error(`Invalid request format: ${errorText}`)
+    }
+  }
+
   if(res.status === 401) throw new Error("Unauthorized")
   if(res.status === 403) {
     const errorText = await res.text()
