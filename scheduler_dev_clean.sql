@@ -1,0 +1,2084 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict wbg3Vjewnm9E8IskFTFpP2yUaAFJvZCskPhTGh8WzxDjwWNQAKaXEahB1ajG0R9
+
+-- Dumped from database version 14.20 (Ubuntu 14.20-0ubuntu0.22.04.1)
+-- Dumped by pg_dump version 14.20 (Ubuntu 14.20-0ubuntu0.22.04.1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: scheduler_dev; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA scheduler_dev;
+
+
+--
+-- Name: leave_status; Type: TYPE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TYPE scheduler_dev.leave_status AS ENUM (
+    'PENDING',
+    'APPROVED',
+    'REJECTED'
+);
+
+
+--
+-- Name: leave_type; Type: TYPE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TYPE scheduler_dev.leave_type AS ENUM (
+    'EMERGENCY',
+    'URGENT',
+    'SICK',
+    'PLANNED',
+    'ANNUAL'
+);
+
+
+--
+-- Name: proficiency_level; Type: TYPE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TYPE scheduler_dev.proficiency_level AS ENUM (
+    'BASIC',
+    'INTERMEDIATE',
+    'ADVANCED',
+    'EXPERT'
+);
+
+
+--
+-- Name: role_type; Type: TYPE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TYPE scheduler_dev.role_type AS ENUM (
+    'STAFF',
+    'MANAGER',
+    'ADMIN'
+);
+
+
+--
+-- Name: shift_type; Type: TYPE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TYPE scheduler_dev.shift_type AS ENUM (
+    'DAY',
+    'EVENING',
+    'NIGHT',
+    'ON-CALL'
+);
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: auth_users; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.auth_users (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    employee_id character varying(100),
+    username character varying(100),
+    email character varying(255),
+    password_hash text NOT NULL,
+    role character varying(20) NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT auth_users_role_check CHECK (((role)::text = ANY ((ARRAY['STAFF'::character varying, 'MANAGER'::character varying, 'ADMIN'::character varying])::text[])))
+);
+
+
+--
+-- Name: departments; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.departments (
+    id integer NOT NULL,
+    org_id integer,
+    name character varying(100) NOT NULL
+);
+
+
+--
+-- Name: departments_id_seq; Type: SEQUENCE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE SEQUENCE scheduler_dev.departments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: departments_id_seq; Type: SEQUENCE OWNED BY; Schema: scheduler_dev; Owner: -
+--
+
+ALTER SEQUENCE scheduler_dev.departments_id_seq OWNED BY scheduler_dev.departments.id;
+
+
+--
+-- Name: leave_requests; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.leave_requests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    leave_code character(5) NOT NULL,
+    employee_id character varying(20),
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    leave_type scheduler_dev.leave_type NOT NULL,
+    status scheduler_dev.leave_status DEFAULT 'PENDING'::scheduler_dev.leave_status,
+    reason text,
+    approved_by character varying(20),
+    created_at timestamp without time zone DEFAULT now(),
+    approved_at timestamp without time zone
+);
+
+
+--
+-- Name: organizations; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.organizations (
+    id integer NOT NULL,
+    name character varying(255) NOT NULL,
+    address text,
+    slug character varying(100)
+);
+
+
+--
+-- Name: organizations_id_seq; Type: SEQUENCE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE SEQUENCE scheduler_dev.organizations_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: organizations_id_seq; Type: SEQUENCE OWNED BY; Schema: scheduler_dev; Owner: -
+--
+
+ALTER SEQUENCE scheduler_dev.organizations_id_seq OWNED BY scheduler_dev.organizations.id;
+
+
+--
+-- Name: pipeline_required_skills; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.pipeline_required_skills (
+    id integer NOT NULL,
+    pipeline_id integer,
+    skill_id integer
+);
+
+
+--
+-- Name: pipeline_required_skills_id_seq; Type: SEQUENCE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE SEQUENCE scheduler_dev.pipeline_required_skills_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: pipeline_required_skills_id_seq; Type: SEQUENCE OWNED BY; Schema: scheduler_dev; Owner: -
+--
+
+ALTER SEQUENCE scheduler_dev.pipeline_required_skills_id_seq OWNED BY scheduler_dev.pipeline_required_skills.id;
+
+
+--
+-- Name: shift_assignments; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.shift_assignments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    shift_id integer,
+    employee_id character varying(20),
+    assigned_hours integer DEFAULT 8,
+    assigned_at timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: shift_required_skills; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.shift_required_skills (
+    id integer NOT NULL,
+    shift_id integer NOT NULL,
+    skill_id integer NOT NULL
+);
+
+
+--
+-- Name: shift_required_skills_id_seq; Type: SEQUENCE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE SEQUENCE scheduler_dev.shift_required_skills_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: shift_required_skills_id_seq; Type: SEQUENCE OWNED BY; Schema: scheduler_dev; Owner: -
+--
+
+ALTER SEQUENCE scheduler_dev.shift_required_skills_id_seq OWNED BY scheduler_dev.shift_required_skills.id;
+
+
+--
+-- Name: shifts; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.shifts (
+    id integer NOT NULL,
+    org_id integer,
+    shift_date date NOT NULL,
+    shift_type scheduler_dev.shift_type NOT NULL,
+    department_id integer,
+    min_staff integer NOT NULL,
+    max_staff integer NOT NULL,
+    priority integer DEFAULT 1,
+    requires_supervisor boolean DEFAULT false,
+    hours integer DEFAULT 8 NOT NULL
+);
+
+
+--
+-- Name: shifts_id_seq; Type: SEQUENCE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE SEQUENCE scheduler_dev.shifts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: shifts_id_seq; Type: SEQUENCE OWNED BY; Schema: scheduler_dev; Owner: -
+--
+
+ALTER SEQUENCE scheduler_dev.shifts_id_seq OWNED BY scheduler_dev.shifts.id;
+
+
+--
+-- Name: skills; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.skills (
+    id integer NOT NULL,
+    department_id integer,
+    skill_name character varying(255) NOT NULL,
+    required_certification character varying(255)
+);
+
+
+--
+-- Name: skills_id_seq; Type: SEQUENCE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE SEQUENCE scheduler_dev.skills_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: skills_id_seq; Type: SEQUENCE OWNED BY; Schema: scheduler_dev; Owner: -
+--
+
+ALTER SEQUENCE scheduler_dev.skills_id_seq OWNED BY scheduler_dev.skills.id;
+
+
+--
+-- Name: staff; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.staff (
+    employee_id character varying(20) NOT NULL,
+    org_id integer,
+    full_name character varying(255) NOT NULL,
+    email character varying(255),
+    phone character varying(50),
+    role scheduler_dev.role_type DEFAULT 'STAFF'::scheduler_dev.role_type NOT NULL,
+    max_hours_per_week integer DEFAULT 40,
+    is_supervisor boolean DEFAULT false,
+    created_at timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: staff_skills; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.staff_skills (
+    id integer NOT NULL,
+    employee_id character varying(20),
+    skill_id integer,
+    proficiency_level scheduler_dev.proficiency_level NOT NULL
+);
+
+
+--
+-- Name: staff_skills_id_seq; Type: SEQUENCE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE SEQUENCE scheduler_dev.staff_skills_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: staff_skills_id_seq; Type: SEQUENCE OWNED BY; Schema: scheduler_dev; Owner: -
+--
+
+ALTER SEQUENCE scheduler_dev.staff_skills_id_seq OWNED BY scheduler_dev.staff_skills.id;
+
+
+--
+-- Name: work_pipelines; Type: TABLE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE TABLE scheduler_dev.work_pipelines (
+    id integer NOT NULL,
+    org_id integer,
+    name character varying(255),
+    department_id integer,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    estimated_staff_hours integer DEFAULT 8,
+    is_recurring boolean DEFAULT true,
+    recurrence_days jsonb,
+    priority integer DEFAULT 3
+);
+
+
+--
+-- Name: work_pipelines_id_seq; Type: SEQUENCE; Schema: scheduler_dev; Owner: -
+--
+
+CREATE SEQUENCE scheduler_dev.work_pipelines_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: work_pipelines_id_seq; Type: SEQUENCE OWNED BY; Schema: scheduler_dev; Owner: -
+--
+
+ALTER SEQUENCE scheduler_dev.work_pipelines_id_seq OWNED BY scheduler_dev.work_pipelines.id;
+
+
+--
+-- Name: departments id; Type: DEFAULT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.departments ALTER COLUMN id SET DEFAULT nextval('scheduler_dev.departments_id_seq'::regclass);
+
+
+--
+-- Name: organizations id; Type: DEFAULT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.organizations ALTER COLUMN id SET DEFAULT nextval('scheduler_dev.organizations_id_seq'::regclass);
+
+
+--
+-- Name: pipeline_required_skills id; Type: DEFAULT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.pipeline_required_skills ALTER COLUMN id SET DEFAULT nextval('scheduler_dev.pipeline_required_skills_id_seq'::regclass);
+
+
+--
+-- Name: shift_required_skills id; Type: DEFAULT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shift_required_skills ALTER COLUMN id SET DEFAULT nextval('scheduler_dev.shift_required_skills_id_seq'::regclass);
+
+
+--
+-- Name: shifts id; Type: DEFAULT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shifts ALTER COLUMN id SET DEFAULT nextval('scheduler_dev.shifts_id_seq'::regclass);
+
+
+--
+-- Name: skills id; Type: DEFAULT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.skills ALTER COLUMN id SET DEFAULT nextval('scheduler_dev.skills_id_seq'::regclass);
+
+
+--
+-- Name: staff_skills id; Type: DEFAULT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.staff_skills ALTER COLUMN id SET DEFAULT nextval('scheduler_dev.staff_skills_id_seq'::regclass);
+
+
+--
+-- Name: work_pipelines id; Type: DEFAULT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.work_pipelines ALTER COLUMN id SET DEFAULT nextval('scheduler_dev.work_pipelines_id_seq'::regclass);
+
+
+--
+-- Data for Name: auth_users; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.auth_users (id, employee_id, username, email, password_hash, role, created_at, updated_at) FROM stdin;
+2d2527d4-bfb7-405c-bed2-1ffec073b625	\N	admin	admin@example.com	$2b$12$wrWhp1Mfl2Lw0xQniR9t8.gLEaNnGqbC0z0LtVd76bU1QgvGaJ5wS	ADMIN	2025-12-07 00:32:09.544567+07	2025-12-07 00:32:09.544567+07
+7885106c-443b-4f0a-a5be-ec227f6647ae	BD111	nuraliyah	nuraliyah@biohospital.sg	$2b$12$RneOBl.o2khaJacTBnjP6uBlauRd6dAbP6DfXnqhUPkC7ES6i1Nmi	MANAGER	2025-12-07 15:36:25.231782+07	2025-12-07 15:36:25.231786+07
+feab6687-b9d4-49ca-a57a-1b8e1823f9b5	BD201	nurbatrishah	nur.batrishah@biohospital.sg	$2b$12$1ndxvT3qCTeP7BTu9Ttr1uK1Y35CjFCfIXGzb7tgoLVUTaNucT76y	MANAGER	2025-12-10 06:30:03.36511+07	2025-12-10 06:30:03.365117+07
+\.
+
+
+--
+-- Data for Name: departments; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.departments (id, org_id, name) FROM stdin;
+1	2	HEMATOLOGY
+2	2	Microbiology
+3	2	Chemistry
+4	2	Immunology
+5	2	Pathology
+6	2	Molecular
+7	2	Blood Bank
+\.
+
+
+--
+-- Data for Name: leave_requests; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.leave_requests (id, leave_code, employee_id, start_date, end_date, leave_type, status, reason, approved_by, created_at, approved_at) FROM stdin;
+19535a33-7a8e-41f5-b89c-99261ca41e5d	IZK81	BD201	2025-12-10	2025-12-13	SICK	APPROVED	sick - trauma	system_auto	2025-12-10 06:31:49.215589	2025-12-10 06:31:49.222164
+55bf04c2-1ba0-43eb-a4d8-8fd5fd1e2c36	P2GUT	BD114	2025-12-23	2025-12-25	ANNUAL	APPROVED	vacation	\N	2025-12-10 17:38:21.140565	2025-12-10 18:13:03.518041
+734e417e-8ff1-4187-82b2-06409ba5cb70	DSO78	BD114	2025-12-15	2025-12-17	ANNUAL	REJECTED	vacation	\N	2025-12-11 04:08:42.221939	\N
+cc2b4fae-6b7d-4083-acce-3a959d303da3	ZS0JT	BD114	2025-12-15	2025-12-19	SICK	APPROVED	sick	system_auto	2025-12-15 01:49:29.208323	2025-12-15 01:49:29.208669
+30f345ca-da52-4e51-9453-98abbe2d3c30	CTCX3	BD114	2025-12-22	2025-12-24	URGENT	APPROVED	urgent leave	system_auto	2025-12-15 01:50:43.651094	2025-12-15 01:50:43.651278
+79a09ebd-e03c-47ae-bc1a-8359bfe1ac02	PCTDW	BD114	2025-12-29	2025-12-31	ANNUAL	REJECTED	new year	\N	2025-12-15 01:51:45.842607	\N
+6e06dded-0aa8-4e6b-a235-c1ee1bc65257	RTLAW	BD112	2025-12-15	2025-12-18	SICK	APPROVED	sick	system_auto	2025-12-15 05:14:17.98947	2025-12-15 05:14:17.989794
+\.
+
+
+--
+-- Data for Name: organizations; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.organizations (id, name, address, slug) FROM stdin;
+2	BIO DEV	Asia, Singapore	bio-dev
+\.
+
+
+--
+-- Data for Name: pipeline_required_skills; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.pipeline_required_skills (id, pipeline_id, skill_id) FROM stdin;
+14	14	2
+\.
+
+
+--
+-- Data for Name: shift_assignments; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.shift_assignments (id, shift_id, employee_id, assigned_hours, assigned_at) FROM stdin;
+21ed48c9-63e5-4e56-8208-c38652bb97b9	2550	BD201	8	2025-12-15 05:14:18.064686
+eb2f1420-42f8-4732-b269-54c28a670ca4	2550	BD203	8	2025-12-15 05:14:18.064955
+482829b8-e945-407f-bef7-76dfbafae60a	2452	BD209	8	2025-12-15 01:53:18.41427
+960dd2a7-5d33-4d0c-ac3a-b0ef4a7c7971	2452	BD212	8	2025-12-15 01:53:18.414504
+afb7f717-789a-4839-9c8b-ef6cc427507a	2452	BD214	8	2025-12-15 01:53:18.414673
+a7e41017-93d1-4abe-af83-7ba71320946b	2452	BD215	8	2025-12-15 01:53:18.414825
+c4e30a37-689d-43d4-a837-19b621819c9d	2455	BD206	8	2025-12-15 01:53:18.448359
+4191d7c8-36dd-4b2b-a883-751e3d98fda3	2455	BD211	8	2025-12-15 01:53:18.448613
+4790f495-4049-41d6-bee6-fa22c0a35b9a	2458	BD202	8	2025-12-15 01:53:18.475759
+e80733c9-6b52-405e-9a4b-53e18b85708a	2458	BD219	8	2025-12-15 01:53:18.475947
+6eb2c1a0-bc23-43cd-8ec5-d74d26c38174	2461	BD111	8	2025-12-15 01:53:18.504079
+1dd2d81d-c4ca-4cb9-8418-fd817e7ffb0b	2461	BD112	8	2025-12-15 01:53:18.504313
+95e96c24-0d89-4684-8a3d-5580bb3be7a5	2461	BD114	8	2025-12-15 01:53:18.504492
+a24a9860-5873-47e2-917b-bbe34f56e2bd	2464	BD208	8	2025-12-15 01:53:18.525769
+75d5181b-0d7f-411b-80c3-c9ddc692787f	2464	BD217	8	2025-12-15 01:53:18.526102
+7da83ab4-74a0-4e36-8fc8-0a7ccb44de01	2467	BD204	8	2025-12-15 01:53:18.551584
+aae5ea9a-c0dd-4248-bc0a-0fe6a49f6a6b	2467	BD216	8	2025-12-15 01:53:18.551876
+d8be05d9-6fbe-4a10-859c-6b9eb7e895bd	2467	BD218	8	2025-12-15 01:53:18.552097
+833d603b-ee2c-4eae-8ef3-08dcd9a8b817	2470	BD205	8	2025-12-15 01:53:18.579498
+3fcf3cf6-4c18-43f5-b3a9-98ced2c15eba	2470	BD213	8	2025-12-15 01:53:18.579872
+c3f4adb6-280d-48c5-a7b7-419fa961ba01	2473	BD201	8	2025-12-15 01:53:18.604663
+386fffc1-e529-4bc8-9c64-9a78c793188f	2473	BD203	8	2025-12-15 01:53:18.604896
+0073abcd-9c41-42da-85ad-7e63750e61f5	2473	BD212	8	2025-12-15 01:53:18.605117
+d94b961d-1195-47d8-94b3-0095525706f3	2473	BD214	8	2025-12-15 01:53:18.605314
+ab04acfa-9fdb-4d33-a450-ef0e4a8d6604	2476	BD206	8	2025-12-15 01:53:18.631743
+2cae6d99-04da-4d83-bf17-b1b391dd05de	2476	BD216	8	2025-12-15 01:53:18.632069
+b9103ff6-c189-49a9-8c15-d08cda2bf9ed	2479	BD202	8	2025-12-15 01:53:18.654752
+f0458be9-cd86-4213-ab06-dba26f98b4ea	2479	BD210	8	2025-12-15 01:53:18.654979
+1f206921-0f4c-4613-9e19-f0bc096af895	2482	BD112	8	2025-12-15 01:53:18.686331
+a9e51bd6-e3e3-499a-997e-fb32d143d74d	2482	BD116	8	2025-12-15 01:53:18.686535
+701f2991-560c-4e4c-8612-8a47d245b02f	2482	BD135	8	2025-12-15 01:53:18.686689
+62c4c181-2fbf-4e72-849f-630cf89fafdc	2485	BD208	8	2025-12-15 01:53:18.711274
+473729c8-9646-4bef-bdf1-2af969c7b002	2488	BD114	8	2025-12-15 01:53:18.740974
+7e12b99e-0f7c-4873-aad9-a7d7e172a01a	2488	BD135	8	2025-12-15 01:53:18.741188
+34868f3f-9243-4c54-89b6-238a048d20e6	2488	BD207	8	2025-12-15 01:53:18.741331
+45377e90-6cbb-4351-a5a3-3f5c8fec3e5e	2491	BD115	8	2025-12-15 01:53:18.770749
+f4632f4d-9c8d-4b6b-b1a5-d174b19d77b5	2491	BD205	8	2025-12-15 01:53:18.770979
+117788aa-c42a-41ff-a181-396aff602b3e	2494	BD201	8	2025-12-15 01:53:18.795844
+67559922-0d7e-47b8-b0a9-3321f6fc9938	2494	BD203	8	2025-12-15 01:53:18.796052
+918f907d-ebc0-43b7-b0df-875e5ab483b1	2494	BD209	8	2025-12-15 01:53:18.796212
+85f13d47-0322-4d13-8782-fb25659d0b5a	2494	BD214	8	2025-12-15 01:53:18.796361
+05eb2584-7aeb-4d6a-8a97-d517e75f2d40	2494	BD215	8	2025-12-15 01:53:18.796514
+94991a56-5da5-4a77-9a7a-06e01f0ec28f	2497	BD116	8	2025-12-15 01:53:18.824534
+47044f21-9199-470b-80e3-e4674be603e7	2497	BD206	8	2025-12-15 01:53:18.824749
+6b2f5d54-586b-44fd-92ee-6fc3ff2199fe	2500	BD202	8	2025-12-15 01:53:18.850098
+0431c3ab-87ee-4cb6-a6ea-943854e1275b	2500	BD210	8	2025-12-15 01:53:18.850333
+4f962461-c100-4662-86be-d491f1e8c598	2503	BD112	8	2025-12-15 01:53:18.885145
+2f53f7d2-df1f-4464-995e-7b6b506c91aa	2503	BD204	8	2025-12-15 01:53:18.8854
+ec5a7464-7c91-404e-8770-27751c57e91c	2503	BD218	8	2025-12-15 01:53:18.885543
+e4e90c56-bc5e-4220-9652-4591962f24f5	2506	BD208	8	2025-12-15 01:53:18.913607
+7d20e951-8f69-4f67-a84d-1fe603f5847d	2506	BD217	8	2025-12-15 01:53:18.913807
+3c5b18ef-a841-43b6-b321-bad378d6fa34	2509	BD116	8	2025-12-15 01:53:18.941192
+cb9ceed7-a3fa-4960-bcee-e0c7c3f36864	2509	BD123	8	2025-12-15 01:53:18.941498
+0bde3a42-f6bd-4b25-ba14-b45d3264ef28	2509	BD135	8	2025-12-15 01:53:18.941724
+b12a47f4-b25c-4a10-a34f-936169f07416	2512	BD205	8	2025-12-15 01:53:18.969912
+192762a6-f1ec-4620-acc9-12e1ff5ce125	2512	BD210	8	2025-12-15 01:53:18.970177
+daf81370-6aa2-4a9d-9e15-eb15c2332b5a	2515	BD203	8	2025-12-15 01:53:18.998057
+532c1141-20d7-496f-81a6-5859820eed1d	2515	BD209	8	2025-12-15 01:53:18.998304
+6e0198b3-ac09-42ed-adb5-081d3f31f17d	2515	BD214	8	2025-12-15 01:53:18.998481
+ec1153c3-e77e-4d74-b1cf-5d45593ad4a6	2518	BD116	8	2025-12-15 01:53:19.026649
+a8a2459f-b5e3-4b28-bf50-2bad43a0817e	2518	BD206	8	2025-12-15 01:53:19.026937
+ff2a68e4-37a6-47e2-b4f2-9040fcbecb74	2521	BD115	8	2025-12-15 01:53:19.054297
+abb52c1b-808f-44b5-91ad-3f63a4f5a5a1	2521	BD202	8	2025-12-15 01:53:19.054839
+07ae416e-536a-45cf-9712-3f316628aef2	2524	BD111	8	2025-12-15 01:53:19.086132
+d101cc7c-2c85-43fd-8a8b-27b5ca769e93	2524	BD207	8	2025-12-15 01:53:19.086662
+fc35bfd7-140f-4d33-aed9-5852d3ee59d7	2524	BD218	8	2025-12-15 01:53:19.08705
+c58b7108-d49c-4c2c-a5af-8a130b002982	2527	BD208	8	2025-12-15 01:53:19.119423
+35bb47ce-77db-4ea0-bf66-846d5771bd07	2527	BD217	8	2025-12-15 01:53:19.119659
+fb77204d-237c-4f45-a861-029cd7b91b63	2530	BD112	8	2025-12-15 01:53:19.145575
+d2e6e150-0d6d-46b1-9435-101fd20befb2	2530	BD123	8	2025-12-15 01:53:19.145751
+b8a9efce-725a-4e8a-a163-bfa154a278dc	2530	BD204	8	2025-12-15 01:53:19.145919
+f3d72eaf-ab56-497e-a27a-c7e5fce395c5	2533	BD205	8	2025-12-15 01:53:19.171259
+a7edf171-0b67-407d-9be3-5a77fe638de5	2533	BD210	8	2025-12-15 01:53:19.171565
+414ce8e1-3c9f-4390-872a-36f23c9227d2	2536	BD209	8	2025-12-15 01:53:19.197537
+85af4791-777d-4578-a8a9-2b48bf89d8de	2536	BD212	8	2025-12-15 01:53:19.197819
+c711b0f3-f3ad-42d5-9f01-9daab5249d69	2536	BD214	8	2025-12-15 01:53:19.198084
+e653abb4-0c3a-485c-9994-d325dd6cf7c6	2539	BD116	8	2025-12-15 01:53:19.225313
+a435bd6b-7e43-499e-b6d3-2992f1f9c2f4	2539	BD211	8	2025-12-15 01:53:19.225508
+63358052-bcb2-4a81-b412-02a78cdcbbbd	2542	BD115	8	2025-12-15 01:53:19.250562
+bb9a88d6-261a-4982-aa9b-df37716f6466	2542	BD202	8	2025-12-15 01:53:19.250787
+d45d771a-13d1-44a7-8359-79406c84dd4a	2545	BD116	8	2025-12-15 01:53:19.278559
+9592401c-452d-4580-9991-8a7768a79638	2545	BD135	8	2025-12-15 01:53:19.278762
+664f2598-4666-49eb-ac8d-93a68264b90e	2545	BD218	8	2025-12-15 01:53:19.278948
+1a37365a-d20f-42df-ad43-c9c071f9092d	2548	BD208	8	2025-12-15 01:53:19.305668
+57ac8c6e-85e9-4245-add2-155c254a6c35	2548	BD217	8	2025-12-15 01:53:19.305876
+f7354935-91a5-40fa-93ef-d17dc4f55c89	2578	BD201	8	2025-12-15 01:53:19.586048
+27c27dab-e024-4ba8-822c-ec9455c0258f	2578	BD209	8	2025-12-15 01:53:19.586294
+dc93d699-b47f-4b80-ad5a-8c732e4a5408	2578	BD214	8	2025-12-15 01:53:19.586455
+8485ecba-4b17-46c2-83de-25a2352612cd	2578	BD215	8	2025-12-15 01:53:19.586601
+66848f58-9065-4438-8d63-bf995545889c	2581	BD116	8	2025-12-15 01:53:19.615722
+345f8001-da7b-4b53-ad68-dd40abb17072	2581	BD206	8	2025-12-15 01:53:19.615944
+2408bf39-a49d-4efb-8673-791c54fd9d1a	2584	BD202	8	2025-12-15 01:53:19.645746
+46ee1fe3-7d11-4e39-9227-063d6e4b43ff	2584	BD219	8	2025-12-15 01:53:19.645972
+44c03032-d8da-4d54-bc8c-0318c25ec3ab	2587	BD111	8	2025-12-15 01:53:19.678339
+65867ff4-12c8-41f5-8022-aedbbece3c21	2587	BD123	8	2025-12-15 01:53:19.678706
+478ce3ea-8dbe-49cf-8544-04ce73b124af	2587	BD135	8	2025-12-15 01:53:19.678955
+772bced0-c79f-417a-a593-1e57c39d3176	2550	BD212	8	2025-12-15 05:14:18.065149
+0f0696b3-780b-4671-987f-4bd12aa63070	2453	BD204	8	2025-12-15 01:53:18.42504
+af7e129e-30c5-461a-b57e-ad790a8ca28f	2453	BD207	8	2025-12-15 01:53:18.42529
+548d6675-a775-4b6c-8700-3b7eaf2d5355	2453	BD218	8	2025-12-15 01:53:18.425458
+68b35782-8fba-4f48-9282-607244a4c1ab	2456	BD210	8	2025-12-15 01:53:18.458612
+fe3c0411-4c00-43fc-bbd5-ec92f4a25eab	2456	BD213	8	2025-12-15 01:53:18.458812
+402f215c-bacb-4387-8d94-fb0a0d59aae3	2459	BD201	8	2025-12-15 01:53:18.485543
+924e2c36-ccc0-48e6-968e-018c1b1b9953	2459	BD209	8	2025-12-15 01:53:18.485756
+b76a8861-b2b2-45a6-bfbc-b8d344c8f7ca	2459	BD215	8	2025-12-15 01:53:18.485911
+955fa06c-00a3-46ba-b492-d91d3f9844ad	2462	BD116	8	2025-12-15 01:53:18.511399
+41ff503c-2efe-48c2-9f68-49d5e7798ecb	2462	BD211	8	2025-12-15 01:53:18.51168
+541769da-8c68-4a30-9288-bfb812451491	2465	BD115	8	2025-12-15 01:53:18.534839
+3c4b8339-8a6a-4547-b021-2fb5f04906b1	2465	BD219	8	2025-12-15 01:53:18.535157
+7665144a-a6bd-4880-b912-8ffc65b19237	2468	BD116	8	2025-12-15 01:53:18.560345
+faa73ad4-8437-401d-a53f-b374274c766a	2468	BD123	8	2025-12-15 01:53:18.560765
+e80536f1-55b0-430d-ba8a-6a6799d6cb71	2468	BD216	8	2025-12-15 01:53:18.561054
+af7cbf49-24be-4b99-b8d4-c85b32ef618e	2471	BD217	8	2025-12-15 01:53:18.587862
+18fb7e60-373e-478b-a6e5-88b43db64eca	2471	BD219	8	2025-12-15 01:53:18.588154
+7c025316-ae01-42a5-8946-29fe6d77ada6	2474	BD112	8	2025-12-15 01:53:18.614087
+01d0da4e-102a-4f3d-b0ba-d55a7932f6a9	2474	BD135	8	2025-12-15 01:53:18.614472
+6ca5b56d-8e08-4aea-8968-9169c1115c2c	2474	BD207	8	2025-12-15 01:53:18.61478
+8308a68f-8bbe-45b1-8102-20976710835b	2477	BD205	8	2025-12-15 01:53:18.638928
+54e6a32e-7423-4c7c-a6a6-657f36b3462a	2477	BD213	8	2025-12-15 01:53:18.639196
+95d22df8-9f37-487a-b773-0e9865a750c9	2480	BD203	8	2025-12-15 01:53:18.66309
+98f2b108-2c69-47f7-b78a-344070397ab0	2480	BD209	8	2025-12-15 01:53:18.663351
+bc980e02-9bc1-423f-b031-cb499e843c81	2480	BD212	8	2025-12-15 01:53:18.663724
+34a66a6a-0310-4152-b46c-aa61ac43421c	2480	BD214	8	2025-12-15 01:53:18.664038
+c1b0854f-9836-45fc-8d86-be661b80de7d	2480	BD215	8	2025-12-15 01:53:18.664233
+6a67ffbd-4c55-4e2e-8828-c033fd416d3b	2483	BD116	8	2025-12-15 01:53:18.694738
+114f9cf3-e30c-4e57-b751-0a3712dcc96f	2483	BD211	8	2025-12-15 01:53:18.694962
+f68f3b17-2251-4c36-ad1d-f6d4ea7c7ed2	2486	BD202	8	2025-12-15 01:53:18.718577
+36818acf-9a69-4ccf-b0f0-2852d10a00e4	2486	BD219	8	2025-12-15 01:53:18.718777
+41364248-47fc-4e79-8cf7-7075eb75fe73	2489	BD112	8	2025-12-15 01:53:18.750247
+d5abb8ca-0473-4fc1-b3cb-6aad47aefd41	2489	BD123	8	2025-12-15 01:53:18.750485
+5803d955-fd30-4d85-9c4b-eca5eb11021e	2489	BD204	8	2025-12-15 01:53:18.75065
+691b795d-90d4-449c-acc6-6586878f6cf3	2492	BD217	8	2025-12-15 01:53:18.780281
+ded1043d-bf38-401f-8e5d-d64230c2d8d8	2492	BD219	8	2025-12-15 01:53:18.780484
+ab7ce732-48a6-45d5-b857-91326d941fef	2495	BD112	8	2025-12-15 01:53:18.803604
+e2df0a9a-2abc-4425-be25-86916d7b00e3	2495	BD114	8	2025-12-15 01:53:18.80381
+8feb8bbf-cde9-47e2-a1fc-6211be23c2bb	2495	BD135	8	2025-12-15 01:53:18.803965
+5ac05b59-6085-4f24-9fa1-33235981e527	2498	BD205	8	2025-12-15 01:53:18.833033
+97420db4-2f9a-4692-84fc-1b385866324d	2498	BD210	8	2025-12-15 01:53:18.833233
+fc747b35-01e9-4455-b1d7-8be33122db58	2501	BD201	8	2025-12-15 01:53:18.860422
+ad9b0cc8-4d34-4163-a45c-a13e6ece2ccc	2501	BD203	8	2025-12-15 01:53:18.860807
+98449d3f-8807-4a75-bb1e-c454fc0673d1	2501	BD212	8	2025-12-15 01:53:18.861503
+571ce88d-b752-4f88-a8a9-df2f3754887f	2501	BD214	8	2025-12-15 01:53:18.861838
+7c8b30fb-be59-4d4f-ad00-e6e7f8ec1622	2501	BD215	8	2025-12-15 01:53:18.86221
+e1ba754a-6bd9-4889-8f28-83848d3d2530	2504	BD206	8	2025-12-15 01:53:18.895584
+e5066cdb-8f4b-4b60-8857-d1b03c85ad2c	2504	BD211	8	2025-12-15 01:53:18.895783
+c4e9f87d-41c0-49da-9d85-e90850db62f7	2507	BD115	8	2025-12-15 01:53:18.921812
+f18b00f1-f962-4bf9-bed9-c9fc20875727	2507	BD202	8	2025-12-15 01:53:18.922045
+d2bc9750-5e78-477d-bc47-dae5211bf8aa	2510	BD111	8	2025-12-15 01:53:18.949785
+67d65066-d42f-4e38-a40c-7c6f2222018f	2510	BD114	8	2025-12-15 01:53:18.950019
+a90e07b5-31f3-4075-91a3-18ef6f5c0f0c	2513	BD217	8	2025-12-15 01:53:18.979695
+ceead50a-24de-438c-a53a-29068ce02f9e	2513	BD219	8	2025-12-15 01:53:18.979927
+221e4c14-f640-465c-89b0-418641d3da70	2516	BD111	8	2025-12-15 01:53:19.007443
+e124863c-4fff-419b-993f-6575be724702	2516	BD114	8	2025-12-15 01:53:19.00768
+4ee1fbbf-46a9-4b6c-86c1-67861d059e56	2516	BD207	8	2025-12-15 01:53:19.007848
+07128624-0727-44db-aa53-158004920d8f	2519	BD205	8	2025-12-15 01:53:19.035079
+2b1f77c5-cfd4-4973-9216-dc6a667c0ff8	2519	BD213	8	2025-12-15 01:53:19.035558
+66e0d699-95a3-462c-8e00-47b83890fb2d	2522	BD203	8	2025-12-15 01:53:19.063435
+a1b6f308-3932-4dec-9e10-3c24ea88fe03	2522	BD212	8	2025-12-15 01:53:19.063868
+0c182d85-1654-43da-8e1a-01b0ad158e9d	2522	BD214	8	2025-12-15 01:53:19.064208
+914e9bd9-986e-4b8f-8577-d83fe3771679	2522	BD215	8	2025-12-15 01:53:19.064457
+ada48ab2-e0a1-45d0-afe9-35495f265c51	2525	BD206	8	2025-12-15 01:53:19.096396
+bacf38c0-7166-407f-9840-350ece8d2a1b	2525	BD211	8	2025-12-15 01:53:19.096833
+488a823f-bb81-4a4e-903f-bf72eb34729b	2528	BD202	8	2025-12-15 01:53:19.129188
+b6bad775-cb28-4fad-9e4f-cbdf34f00c67	2528	BD219	8	2025-12-15 01:53:19.129386
+0bc51ce7-08a0-4648-9274-3294ab54fe8a	2531	BD111	8	2025-12-15 01:53:19.153848
+f312230b-b3c1-4ab4-940a-7bae03281c1b	2531	BD204	8	2025-12-15 01:53:19.154049
+2036550d-7959-4010-a265-5bc9d752477f	2531	BD218	8	2025-12-15 01:53:19.154194
+9b22f78d-a981-45b4-984a-a28877e26835	2534	BD219	8	2025-12-15 01:53:19.179307
+e885c9ef-2ede-40f5-b304-d1e1f25d395c	2537	BD112	8	2025-12-15 01:53:19.20681
+7ff31845-3e31-4fd6-9ff0-9f520398a258	2537	BD114	8	2025-12-15 01:53:19.207002
+994f1c63-a379-4a81-a5a0-9eed47377b58	2537	BD123	8	2025-12-15 01:53:19.20715
+3bbb731a-1047-4ee7-aa40-f08f404c2d59	2540	BD210	8	2025-12-15 01:53:19.234394
+203d0d86-bfa4-4a5c-88b1-5ddcb85ec490	2540	BD213	8	2025-12-15 01:53:19.234588
+58357e54-24dc-4ac5-a0aa-3846cc44f047	2543	BD201	8	2025-12-15 01:53:19.259995
+6c23a5f2-65ac-43ad-99c0-7a32b0da54be	2543	BD209	8	2025-12-15 01:53:19.260203
+4a85d4b2-c00d-46de-b79f-908839247509	2543	BD214	8	2025-12-15 01:53:19.260346
+7ed440b7-2af7-40dc-8652-6a1fbe1598f0	2543	BD215	8	2025-12-15 01:53:19.260494
+f18a4806-e247-4cb8-8b1b-22676fe7d9fe	2546	BD206	8	2025-12-15 01:53:19.288688
+5f787c6e-d052-4e32-a0ef-d352f7a8ed1c	2546	BD216	8	2025-12-15 01:53:19.288932
+812fc585-7f0b-4714-b0b4-d2cc8ec2e3c4	2549	BD115	8	2025-12-15 01:53:19.314169
+f66dace6-5764-458a-a8ab-1ebf30e20351	2549	BD202	8	2025-12-15 01:53:19.314375
+782a43a1-11ef-4e56-aba6-4d7056a50c6c	2579	BD204	8	2025-12-15 01:53:19.596126
+291cf10f-3754-45f4-8a19-2a218b88b201	2579	BD207	8	2025-12-15 01:53:19.596399
+2f036d93-cad2-4a9d-a061-80f744fa107d	2579	BD218	8	2025-12-15 01:53:19.596592
+18ffe237-bd00-4235-bf10-2a4a6b69d3e3	2582	BD205	8	2025-12-15 01:53:19.624779
+d558f2bb-aa6a-45d4-b3a6-b659891e895d	2582	BD213	8	2025-12-15 01:53:19.625005
+b0aab1cf-40da-4270-862a-e9b211ec7a32	2585	BD209	8	2025-12-15 01:53:19.656226
+4abd1409-ed61-4147-ba5b-deb40f888430	2585	BD214	8	2025-12-15 01:53:19.656591
+52a6fdd1-7c5f-4b67-b4df-0ecc3515db83	2585	BD215	8	2025-12-15 01:53:19.656892
+1a5b7d76-eb36-4ddb-8c85-b963726dd432	2588	BD206	8	2025-12-15 01:53:19.688435
+bc72380a-9d44-44bd-8cb3-5f12dc3a6783	2588	BD211	8	2025-12-15 01:53:19.688852
+65d37a97-6f05-47f2-bf3e-4ae9a39b7fa8	2591	BD115	8	2025-12-15 01:53:19.720285
+d97e6ca7-8e8a-436d-bb69-6bead39caf71	2550	BD214	8	2025-12-15 05:14:18.065337
+8740997b-05d4-418f-80ed-da318c26fde4	2550	BD215	8	2025-12-15 05:14:18.065515
+ba45c2c9-3782-405e-a731-5e5780510bd9	2553	BD116	8	2025-12-15 05:14:18.102638
+1f080e12-4a31-4172-aff5-115d9c61db9d	2553	BD211	8	2025-12-15 05:14:18.102862
+f1510f87-b262-4730-b426-a8dacc4fe082	2556	BD115	8	2025-12-15 05:14:18.135475
+f2b97638-7bcf-47ea-93b1-3ea28764deea	2556	BD202	8	2025-12-15 05:14:18.135708
+9e1ad247-50e8-462d-b7ca-22f3434652f8	2559	BD216	8	2025-12-15 05:14:18.164577
+d84f454c-2a17-4203-91d0-8decf111d6da	2559	BD218	8	2025-12-15 05:14:18.16486
+8e43ed17-0130-4024-9956-6a6bc81ed17d	2562	BD217	8	2025-12-15 05:14:18.191543
+dc8a714e-69c4-4613-97ea-7214fb034e96	2565	BD111	8	2025-12-15 05:14:18.217929
+3e45fc89-3a56-4ce7-ad75-1c60b9c920ee	2565	BD218	8	2025-12-15 05:14:18.21819
+c5a44b48-2903-43f5-a45a-01d5431e7928	2568	BD205	8	2025-12-15 05:14:18.241546
+2985fc88-b4d3-4078-8362-e5d0b53739d2	2568	BD213	8	2025-12-15 05:14:18.241816
+535d2b26-b383-4f32-b977-a0735b7a847b	2571	BD203	8	2025-12-15 05:14:18.265892
+5ddbebe1-0d2e-4735-8f53-6cf63391e685	2571	BD209	8	2025-12-15 05:14:18.266187
+b08c8f78-e1dc-4f1b-9045-606bd63e67c4	2571	BD212	8	2025-12-15 05:14:18.266444
+159c628b-a2e3-4ea4-af39-6ca712ce456f	2574	BD206	8	2025-12-15 05:14:18.290084
+1c9350b3-4b15-49cc-8883-dcd03ba4a05b	2574	BD211	8	2025-12-15 05:14:18.290444
+98c596f8-393d-4819-8fa9-dadf90706e24	2577	BD115	8	2025-12-15 05:14:18.317042
+1594f0f2-7dc9-4b6f-a6a1-60032413d59f	2577	BD210	8	2025-12-15 05:14:18.317226
+2c53109e-2fcd-4c07-b268-6d8d207f8d25	2681	BD216	4	2025-12-15 05:14:18.339853
+45586726-115d-4511-baf6-57b0f3f83ec9	2454	BD204	8	2025-12-15 01:53:18.436575
+ad4f774f-7c8b-4815-9971-f1c03e295619	2454	BD207	8	2025-12-15 01:53:18.436816
+58bd2bb5-2850-4c21-bfc0-ae407c1ce553	2454	BD218	8	2025-12-15 01:53:18.437028
+dbfd04dc-43f0-47c8-beeb-27e2cf9101eb	2457	BD208	8	2025-12-15 01:53:18.467816
+68b9b9c4-70c5-4e10-b28c-40c644a250b6	2460	BD111	8	2025-12-15 01:53:18.494702
+66fb8440-a939-4d00-a739-a92a61960080	2460	BD207	8	2025-12-15 01:53:18.495201
+97772790-3300-4ee2-8568-879c3c19f25e	2460	BD218	8	2025-12-15 01:53:18.495401
+325694b1-0f44-4443-a0be-12d8aebc8c0b	2463	BD115	8	2025-12-15 01:53:18.518246
+e86c6534-cdc2-4b31-84ee-31c203935540	2463	BD213	8	2025-12-15 01:53:18.518527
+89b4ca2f-f69e-4a22-9162-6ad988c83103	2466	BD201	8	2025-12-15 01:53:18.543
+fbb86fb4-dd58-4bbd-b173-987309a0149d	2466	BD209	8	2025-12-15 01:53:18.54332
+f7867981-de4d-4227-8181-558eaeb73d2d	2466	BD212	8	2025-12-15 01:53:18.543534
+b7f8fd22-df21-4772-8426-9c80f03c7fec	2466	BD215	8	2025-12-15 01:53:18.543729
+98f97736-3a22-420b-bbc9-026117cbc8d5	2469	BD206	8	2025-12-15 01:53:18.569957
+c799a69d-0afa-418b-b586-10c8699f9daa	2469	BD211	8	2025-12-15 01:53:18.570213
+c313bc92-c31b-4ec7-83c3-70478f1566bf	2472	BD115	8	2025-12-15 01:53:18.596474
+c34b2e21-4d28-4c99-9019-34a90a8027f9	2472	BD202	8	2025-12-15 01:53:18.596805
+262450a3-9b92-4780-b0b8-0348e0afe864	2475	BD111	8	2025-12-15 01:53:18.62255
+8e18e075-5c33-4c5b-a798-70031afeeee4	2475	BD123	8	2025-12-15 01:53:18.622849
+981ae300-4754-4b01-a5c0-dca3335eb2c8	2475	BD218	8	2025-12-15 01:53:18.623107
+b80f72c4-c44f-41c2-8096-978db839b78d	2478	BD208	8	2025-12-15 01:53:18.647477
+4180bd61-86a7-4fec-a098-07daecf924e1	2478	BD217	8	2025-12-15 01:53:18.64775
+a010ffff-1117-43cf-be16-80501cf971eb	2481	BD111	8	2025-12-15 01:53:18.67694
+a974f2c3-4437-4b29-a44c-080dd8d509d5	2481	BD114	8	2025-12-15 01:53:18.677193
+b8a59fa3-632b-4606-a3e5-123205123722	2481	BD135	8	2025-12-15 01:53:18.67738
+5a2191f7-7fcd-4388-aa2d-de42e13c6f64	2484	BD205	8	2025-12-15 01:53:18.701966
+64141072-485e-4e71-82ce-bf474b533b17	2484	BD213	8	2025-12-15 01:53:18.702172
+55438ba0-fdbb-43c6-9283-3906ecaacd24	2487	BD201	8	2025-12-15 01:53:18.728946
+cd972ba4-c45a-45a8-9ece-4ab3d754551a	2487	BD203	8	2025-12-15 01:53:18.7292
+1bf8e03b-55d1-4956-bcfc-8c179e92415f	2487	BD212	8	2025-12-15 01:53:18.729381
+ddd9172a-5bc1-4462-8bf5-df7a363d34b5	2487	BD214	8	2025-12-15 01:53:18.729589
+c50db8ce-c806-4c84-aba9-f5aaa7cbb288	2490	BD206	8	2025-12-15 01:53:18.761266
+a0ae6042-99c5-4c8a-8afe-4b885858f6fd	2490	BD211	8	2025-12-15 01:53:18.761509
+c03c0c43-930d-40c0-9015-46d39ff808f6	2493	BD115	8	2025-12-15 01:53:18.787777
+05e27699-0d85-43ad-8af8-78b24ff81f1f	2493	BD210	8	2025-12-15 01:53:18.787984
+e81ae122-e808-4afb-9ef7-51eab89d1ec3	2496	BD111	8	2025-12-15 01:53:18.813752
+41038d53-0e1a-436c-b2e8-2d25a3c4116e	2496	BD114	8	2025-12-15 01:53:18.814023
+d3110836-bf7e-4231-9fb1-b12e99304e49	2496	BD204	8	2025-12-15 01:53:18.814206
+26a19e1a-3393-432e-851b-78f84ae31ade	2499	BD208	8	2025-12-15 01:53:18.841521
+417ba5e1-1819-4a79-a251-b785d12ce4c3	2499	BD217	8	2025-12-15 01:53:18.841775
+6df16bf1-5d96-4438-af77-aebf8e0c68b2	2502	BD111	8	2025-12-15 01:53:18.873836
+2c21fe9b-8a9e-4af2-be4b-3378cde5c093	2502	BD123	8	2025-12-15 01:53:18.874082
+fb64cd12-3915-4707-b756-80309f146389	2502	BD207	8	2025-12-15 01:53:18.874227
+a1b07dbf-21f1-40f5-a356-5f66b993ad53	2505	BD205	8	2025-12-15 01:53:18.904296
+cb2705a9-942d-443f-9276-d7ebaf7c2c0a	2505	BD213	8	2025-12-15 01:53:18.904551
+0d45605b-5018-4578-9c5f-69af3fdabec2	2508	BD201	8	2025-12-15 01:53:18.930738
+c9110091-a07a-4a55-ae7e-88ecfdfcd34a	2508	BD203	8	2025-12-15 01:53:18.930918
+a75bc4f1-5db4-4d12-aa7f-dac3c6cba7bc	2508	BD209	8	2025-12-15 01:53:18.931061
+9b96f16e-62b3-4600-be26-501057217d2f	2508	BD212	8	2025-12-15 01:53:18.931218
+6122f870-644b-44d7-a344-e97d7c41986a	2508	BD215	8	2025-12-15 01:53:18.931344
+c2fa9f59-7f48-428f-9ba5-2b3a074c0f9c	2511	BD211	8	2025-12-15 01:53:18.960337
+c1c0f186-d209-4306-b2ae-39dda2030628	2511	BD216	8	2025-12-15 01:53:18.960571
+cfe0743b-51cf-446a-8457-0b01df3c7745	2514	BD115	8	2025-12-15 01:53:18.989483
+10bad497-77cf-4f49-8e1d-701a759583a9	2514	BD219	8	2025-12-15 01:53:18.989718
+d96cff49-c4f7-4ee2-a2be-20e428263519	2517	BD116	8	2025-12-15 01:53:19.016477
+0c7c9041-014f-4d78-8a62-b817b0ca5ee7	2517	BD123	8	2025-12-15 01:53:19.016702
+46a92fb8-0ee7-4613-887f-8118da548ca8	2517	BD135	8	2025-12-15 01:53:19.016868
+f84b232d-8290-4b7d-bf4f-534f6be4f8cc	2520	BD208	8	2025-12-15 01:53:19.04531
+0f4ab13b-e369-4db1-91ac-8872fc4520c1	2523	BD112	8	2025-12-15 01:53:19.074673
+653bf2d9-dab9-40a3-abc0-c643d510102c	2523	BD204	8	2025-12-15 01:53:19.075112
+f3bbe7fb-838f-4283-af18-5bc79c3162b8	2523	BD207	8	2025-12-15 01:53:19.075529
+f1ba1883-c684-49ef-a185-2aedcec6b124	2526	BD205	8	2025-12-15 01:53:19.109612
+9f1370ba-f7d7-4c7b-b6db-da9789863bbf	2526	BD213	8	2025-12-15 01:53:19.109779
+3021d632-041d-40cd-8a39-e608a19c5cdd	2529	BD203	8	2025-12-15 01:53:19.138183
+d8f96fdb-1618-4c67-b5d0-2fbf7d1297bf	2529	BD209	8	2025-12-15 01:53:19.138424
+7e544ad9-eb3d-4717-9b1c-9a23836513ad	2529	BD212	8	2025-12-15 01:53:19.138591
+f731f541-abc1-41ac-8a0d-2c11a4de85d2	2529	BD215	8	2025-12-15 01:53:19.138739
+3ab2c2fb-9b6c-4535-9b46-830616264c7b	2532	BD206	8	2025-12-15 01:53:19.162354
+6d31b5cd-56ac-4852-8a4e-ab4e311721e5	2532	BD211	8	2025-12-15 01:53:19.162538
+4db71fae-4eba-434a-86dc-219327fa42a6	2535	BD210	8	2025-12-15 01:53:19.189015
+f4fb0f7c-eb0d-4187-a105-6fee1d9ccec9	2535	BD219	8	2025-12-15 01:53:19.189237
+408fb759-07cb-44f5-a977-a127cc4f8af0	2538	BD112	8	2025-12-15 01:53:19.21608
+d4a8ba4b-d71f-4fa1-a6a8-1503b1e3b3c1	2538	BD204	8	2025-12-15 01:53:19.216281
+50e0eb63-2d88-483e-af0a-2ee46f2c2324	2538	BD218	8	2025-12-15 01:53:19.216429
+0848fe3a-cfd4-4ac3-bad4-5ba63dce1154	2541	BD208	8	2025-12-15 01:53:19.241895
+4c721e6b-7cfb-4d8f-ae2a-3958c0ca83d1	2541	BD217	8	2025-12-15 01:53:19.242118
+9f53cba2-809d-49e8-a30f-0e3ac9b9715a	2544	BD114	8	2025-12-15 01:53:19.26953
+0e1bc5ce-466a-4ad4-85ec-a8d4c70069dc	2544	BD135	8	2025-12-15 01:53:19.269751
+7233b42c-6ece-4a2c-a2bd-fd4f9f1599f2	2544	BD207	8	2025-12-15 01:53:19.269899
+3f11a8da-25f6-4808-bdfd-5b55a634ffca	2547	BD210	8	2025-12-15 01:53:19.297116
+1dd55949-97e7-4e8c-99be-62debf99699c	2547	BD213	8	2025-12-15 01:53:19.297326
+58bdc652-3615-494a-b70c-5c60d16b6915	2580	BD123	8	2025-12-15 01:53:19.604784
+38c10d75-ec9d-44e6-bc62-cf1f839cd1a1	2580	BD135	8	2025-12-15 01:53:19.60505
+5a262065-9bf2-4c41-81ec-d96db166de86	2583	BD208	8	2025-12-15 01:53:19.635158
+059e0013-1265-43c8-80a7-d94efacf1389	2583	BD217	8	2025-12-15 01:53:19.63539
+eab86f1a-1d23-4190-8197-edd9666347f9	2586	BD111	8	2025-12-15 01:53:19.667829
+a2e6ca06-b61b-4632-91f7-cb7db0bc5e71	2586	BD123	8	2025-12-15 01:53:19.668189
+567e8cdf-4749-499e-be77-2ad47ae8b798	2586	BD204	8	2025-12-15 01:53:19.668376
+45fad6b8-5660-4dbd-9165-64f419e4f0eb	2589	BD205	8	2025-12-15 01:53:19.698993
+d09fb258-97cb-46d9-8fa3-0c96bdeeac59	2589	BD210	8	2025-12-15 01:53:19.69922
+540fbc64-c5d3-4a73-912c-7fb8313a3cb9	2592	BD201	8	2025-12-15 01:53:19.730415
+7ea2acc9-79c5-4736-ab92-736d2eb8297d	2551	BD203	8	2025-12-15 05:14:18.078964
+713973b0-3612-4d13-8b7f-129a3b531346	2551	BD204	8	2025-12-15 05:14:18.079163
+9b98101e-238f-4212-995b-4cc3af794f84	2554	BD205	8	2025-12-15 05:14:18.113725
+ec887885-b404-4828-984b-2cd013006d87	2554	BD213	8	2025-12-15 05:14:18.114068
+645b0957-e1dc-418b-bd73-d9977feda92e	2557	BD201	8	2025-12-15 05:14:18.14558
+3bec7983-8ccf-4711-b95a-69102150f324	2557	BD203	8	2025-12-15 05:14:18.145842
+22815946-f1b7-4495-86b4-695f71b22f10	2557	BD212	8	2025-12-15 05:14:18.146056
+b4fdf09b-286f-4d6e-be51-e5af40b6a822	2557	BD215	8	2025-12-15 05:14:18.14627
+6ea370c0-b6d7-48c6-953c-0884bc5da31c	2560	BD116	8	2025-12-15 05:14:18.173226
+251d3fdc-c31b-4b20-91fd-4b4b039a54d1	2560	BD211	8	2025-12-15 05:14:18.173467
+4ba27cd3-a1f7-4dc3-b1f2-5982b5500d52	2563	BD202	8	2025-12-15 05:14:18.1995
+e944dffe-cca1-4a9a-a5d7-017237d481db	2563	BD219	8	2025-12-15 05:14:18.199825
+d20d7220-49f7-4507-b664-749bf3f00019	2566	BD135	8	2025-12-15 05:14:18.225975
+d8c63459-3a64-407e-bdb2-d8234860c2e3	2566	BD204	8	2025-12-15 05:14:18.226215
+574dbbf8-45cc-4717-9e23-316aa1a0d809	2566	BD218	8	2025-12-15 05:14:18.226393
+94673dbe-0f7a-406a-92ea-0a740311d715	2569	BD208	8	2025-12-15 05:14:18.248826
+fd0ad94e-8f0e-479a-a991-f58f912cd9ed	2569	BD217	8	2025-12-15 05:14:18.249133
+f962de74-f1d2-4861-bf19-3409f135d6ff	2572	BD135	8	2025-12-15 05:14:18.273754
+1de495d3-777c-4513-9a3f-293c1286b0da	2590	BD208	8	2025-12-15 01:53:19.709731
+4c745b33-2811-48bc-ab7f-1064fddff02a	2590	BD219	8	2025-12-15 01:53:19.709952
+e602b7b0-5bcd-4756-8672-58604e41d541	2593	BD111	8	2025-12-15 01:53:19.739507
+1964e063-57b8-4ade-b084-f45258409efd	2593	BD123	8	2025-12-15 01:53:19.739717
+8e2ec1c2-6549-4342-91b7-33d72256fb3d	2593	BD207	8	2025-12-15 01:53:19.739877
+70df173c-720e-4506-a815-596f2b397152	2596	BD205	8	2025-12-15 01:53:19.764538
+66c2a228-197c-4541-adb2-8ee25c2b5460	2596	BD210	8	2025-12-15 01:53:19.764735
+38d04034-9d6e-4b46-b636-b6d0138cc808	2599	BD203	8	2025-12-15 01:53:19.788527
+b4b52d36-652e-4bfb-9c53-44c487ff066c	2599	BD209	8	2025-12-15 01:53:19.78876
+c17ff563-5828-43c2-846e-045fe177ecb8	2599	BD212	8	2025-12-15 01:53:19.78891
+10a698a1-9433-4d7c-836b-7ca988460645	2599	BD214	8	2025-12-15 01:53:19.78908
+57558e0b-781a-4935-9d56-a7b84fe39965	2599	BD215	8	2025-12-15 01:53:19.789281
+db3a0ebe-1a90-46dd-a429-6bcc47367916	2602	BD116	8	2025-12-15 01:53:19.815306
+0443f1f7-5e1c-4f26-b6a2-dfa0a075c169	2602	BD211	8	2025-12-15 01:53:19.815484
+bd521737-8606-43e1-a366-ddc9627d1eef	2605	BD202	8	2025-12-15 01:53:19.846561
+d9f2410d-056b-4d29-9ab6-6e5d87e94177	2605	BD219	8	2025-12-15 01:53:19.846803
+6d4a1ea9-e574-401d-b4c1-9565f8796efa	2608	BD201	8	2025-12-15 01:53:19.87502
+9b025c49-b836-4d3a-b35c-3a10bcc4fa3d	2608	BD207	8	2025-12-15 01:53:19.875203
+ed2253ed-fad3-446f-bf1c-d27e5abf0e9c	2611	BD217	8	2025-12-15 01:53:19.906049
+8b2420a0-cd16-4fec-8dfb-fe93e8b8afa5	2611	BD219	8	2025-12-15 01:53:19.906221
+5d10a3c5-4412-42fc-bfcd-5d2402533284	2614	BD111	8	2025-12-15 01:53:19.936464
+d640371d-3c55-41a2-9c81-24f7f2f83396	2614	BD218	8	2025-12-15 01:53:19.936852
+0ea552d8-3079-475d-ae10-75ef416b71f9	2617	BD205	8	2025-12-15 01:53:19.962417
+1453b503-578a-4820-89a1-c2def05be9ff	2617	BD213	8	2025-12-15 01:53:19.962605
+90af5ff9-794d-45a1-b71b-fab6d051ce59	2620	BD203	8	2025-12-15 01:53:19.988705
+1a190575-7653-4e70-9259-619ef1554911	2620	BD209	8	2025-12-15 01:53:19.988899
+9cdfb08e-555d-46ab-b72e-c61eb119ca80	2620	BD212	8	2025-12-15 01:53:19.98904
+0164f8b4-ce40-49cc-bf2c-4a296003c224	2620	BD215	8	2025-12-15 01:53:19.989379
+fa48c7b4-8a62-45fa-98f3-bee102132a5f	2623	BD206	8	2025-12-15 01:53:20.019778
+20f320d1-d8df-40d1-950b-d728094a86e5	2623	BD211	8	2025-12-15 01:53:20.020003
+c891727b-9f47-4a8b-9182-278aa5168208	2626	BD115	8	2025-12-15 01:53:20.051364
+912fa0a2-c19e-47d8-b00b-d91e3fa71671	2626	BD210	8	2025-12-15 01:53:20.051568
+6bab1194-827c-43bd-9a2d-0bff25726a88	2629	BD111	8	2025-12-15 01:53:20.078634
+77b87793-30c1-4ce9-93bc-2e41658ca21a	2629	BD114	8	2025-12-15 01:53:20.078827
+5e46913d-fada-4f19-92f2-dc8fbaa857f5	2629	BD123	8	2025-12-15 01:53:20.078976
+dc640c93-70aa-464d-9269-f8388ff19c0d	2632	BD217	8	2025-12-15 01:53:20.102996
+45b8c3f8-a8e5-4860-b70d-e77f2586e14b	2635	BD135	8	2025-12-15 01:53:20.128129
+a1e1c79b-57e1-4e6d-b28b-0d75ee01336d	2635	BD207	8	2025-12-15 01:53:20.128332
+79cdb7ba-bbde-401e-ac90-e23d66cb1cca	2635	BD218	8	2025-12-15 01:53:20.128485
+7cd9c1a4-8c54-4069-a9e0-ee6c7eb6df58	2638	BD115	8	2025-12-15 01:53:20.156292
+b0d37b98-a928-4862-b340-45cfd21e0a25	2638	BD205	8	2025-12-15 01:53:20.156472
+9fdb6d74-04ce-42fe-a9c5-b24f3ea1c693	2641	BD201	8	2025-12-15 01:53:20.184827
+bd69ce9a-aa41-4eac-8c71-67844bc7d5f7	2641	BD203	8	2025-12-15 01:53:20.18505
+37533908-9113-47da-9a5e-6064c69691a4	2641	BD209	8	2025-12-15 01:53:20.18521
+726eed27-518b-4a5a-a478-a60dfb916393	2641	BD212	8	2025-12-15 01:53:20.185356
+125d14cd-e866-4176-95f5-307c8f7bfe72	2644	BD206	8	2025-12-15 01:53:20.211708
+85383cae-a2f5-460e-adcb-94e65f71007c	2644	BD211	8	2025-12-15 01:53:20.211918
+d778f1f9-66f5-4e26-acd4-97b11b686ac2	2647	BD202	8	2025-12-15 01:53:20.237667
+68636b3d-0cad-4078-a6b1-6e5907e00bca	2647	BD219	8	2025-12-15 01:53:20.237866
+4fffe23c-b301-4d72-b5d1-ccc80c832d84	2650	BD123	8	2025-12-15 01:53:20.263699
+80f02ad6-c3f6-44c2-8a5a-64fc4485b908	2650	BD204	8	2025-12-15 01:53:20.264057
+5ea9d221-a359-4f6d-9654-d8a7b54a3aa3	2650	BD218	8	2025-12-15 01:53:20.264379
+6b71d00a-7003-4545-9826-ce2c341df6dd	2653	BD208	8	2025-12-15 01:53:20.289176
+8bd4692c-2a9e-47a5-9f7b-a11c11e27ca6	2653	BD217	8	2025-12-15 01:53:20.289383
+be750ea5-404e-49e7-85c5-c9d9178a3373	2656	BD111	8	2025-12-15 01:53:20.313366
+c270318b-5967-44e1-a2f8-076e33fd6c7e	2656	BD112	8	2025-12-15 01:53:20.313554
+f24417f3-58e3-4e51-bd0b-11edad0c9637	2656	BD218	8	2025-12-15 01:53:20.313691
+5e200146-336f-4c21-a725-fb5e67e729ff	2659	BD213	8	2025-12-15 01:53:20.33885
+4d64a87a-bc71-405c-913a-afb7d3dd1921	2659	BD216	8	2025-12-15 01:53:20.339033
+d94318fb-8d4a-4209-bec1-ceec81a11cc6	2662	BD201	8	2025-12-15 01:53:20.367939
+0bad59a4-b627-4715-b3d8-4b04741b051b	2662	BD203	8	2025-12-15 01:53:20.368135
+a00a4e52-5e09-4eea-8229-ca5cec41fdb3	2662	BD212	8	2025-12-15 01:53:20.368273
+ba57cdae-1395-40b7-8c6f-66c9d133ea31	2662	BD214	8	2025-12-15 01:53:20.368398
+bc7d6d34-78aa-43db-b70b-2b617f445c88	2662	BD215	8	2025-12-15 01:53:20.368523
+04b465ca-3795-470f-bc1c-2d02ab4a6c17	2665	BD116	8	2025-12-15 01:53:20.396483
+47c267ac-4f7e-4929-8658-64d8a250571a	2665	BD216	8	2025-12-15 01:53:20.396705
+65096128-a39c-4639-ad15-1da3081995a1	2668	BD203	8	2025-12-15 01:53:20.431065
+7aa239b1-447e-4527-9e4d-e8b44b00ae3f	2668	BD211	8	2025-12-15 01:53:20.43126
+3d4e69cc-a03f-4a0d-8dc1-85ac61c3cc72	2671	BD203	4	2025-12-15 01:53:20.457314
+53a0d85f-eece-49d1-b64a-8445f1ca9f93	2674	BD114	4	2025-12-15 01:53:20.481196
+5bce8466-8000-4404-affb-e05d4108f8cb	2677	BD216	4	2025-12-15 01:53:20.503476
+598d1829-10a9-491d-b235-b12612078b21	2683	BD216	4	2025-12-15 01:53:20.549496
+60072404-aaf4-46b7-8a44-d8d04644db19	2686	BD216	4	2025-12-15 01:53:20.571857
+4cb2d2b7-00a6-4fb6-8356-ef2fb058a821	2689	BD112	4	2025-12-15 01:53:20.597743
+0d90aae7-22a1-41a2-8c47-5ea19a1f7164	2572	BD207	8	2025-12-15 05:14:18.274105
+e7af6981-9edb-428b-865f-b33d535acf9d	2575	BD210	8	2025-12-15 05:14:18.299241
+d9ca20e9-a24e-4606-ae24-d58b9f52ee8c	2575	BD213	8	2025-12-15 05:14:18.299602
+bd5f78dc-9a12-4f6f-8e92-13d2e743632d	2679	BD116	4	2025-12-15 05:14:18.325119
+befdab29-586d-497b-82c1-cdabbb4e02a7	2682	BD216	4	2025-12-15 05:14:18.347089
+52800650-a522-4e2b-b3e3-1da5cbe6b98a	2552	BD204	8	2025-12-15 05:14:18.091118
+99f71201-6ca3-4bf7-a50c-8b689477c35b	2552	BD111	8	2025-12-15 05:14:18.0913
+771241c8-734b-4ff9-a1d0-e3f75bd14228	2552	BD218	8	2025-12-15 05:14:18.091496
+f5bd6e0d-4ef8-483a-906a-908aa8012988	2552	BD123	8	2025-12-15 05:14:18.091656
+c40a7ef0-b6e5-41fa-ad3d-a4246f4b6220	2555	BD208	8	2025-12-15 05:14:18.125048
+acb288b9-1e26-409b-9b0a-85a763360d8a	2555	BD217	8	2025-12-15 05:14:18.125297
+6c7ba567-ef70-42eb-b962-45235f0c6212	2558	BD111	8	2025-12-15 05:14:18.155431
+2a5f7af8-39d8-4585-9666-645bc8bb2e68	2558	BD218	8	2025-12-15 05:14:18.155683
+59a82f74-5abc-4e46-a292-3e97d3a9064b	2561	BD210	8	2025-12-15 05:14:18.182922
+64140b90-85d1-4806-9393-cd6a1b79b176	2561	BD213	8	2025-12-15 05:14:18.183192
+2087da6a-be8d-4221-9eee-a43703552d81	2564	BD201	8	2025-12-15 05:14:18.208218
+c9946611-3bc5-443f-bb59-35eab08035bf	2564	BD203	8	2025-12-15 05:14:18.208529
+2b571008-119b-4adf-a8bd-c4b13436e4c0	2564	BD209	8	2025-12-15 05:14:18.208745
+949a23be-8834-49cf-9b32-c6aa83fb68fc	2564	BD212	8	2025-12-15 05:14:18.208945
+b413a89f-9f8d-4e9c-9e12-288999c3306c	2564	BD214	8	2025-12-15 05:14:18.209124
+009afad5-2481-409b-9e96-bf9ae7c0e1ae	2567	BD116	8	2025-12-15 05:14:18.234401
+ec5628bd-dda8-4506-be71-4615d558d553	2567	BD206	8	2025-12-15 05:14:18.234668
+63948686-5058-45b6-8faa-2a2ef421ff38	2570	BD115	8	2025-12-15 05:14:18.255855
+aea28806-93f1-4c93-bd9e-82c588c3583f	2591	BD219	8	2025-12-15 01:53:19.720516
+dc8b026c-d4fb-42eb-a3d3-c4b6db5ee955	2594	BD114	8	2025-12-15 01:53:19.748089
+04653de9-cc10-4c18-bde9-40cded0152a2	2594	BD123	8	2025-12-15 01:53:19.748292
+338cb03d-74fd-453c-af14-02a61d5340b4	2594	BD207	8	2025-12-15 01:53:19.74847
+c37795bb-f751-4688-9607-6281594db9b5	2597	BD208	8	2025-12-15 01:53:19.771277
+8b56b831-56ce-4513-bec5-260c36c23e20	2600	BD111	8	2025-12-15 01:53:19.798475
+7e4fe6d6-5e40-4647-8b65-9c61f29b1893	2600	BD218	8	2025-12-15 01:53:19.798668
+2e7b2d91-4df0-4a07-a695-1099b29dfe0f	2603	BD210	8	2025-12-15 01:53:19.824144
+fca08d0c-1f11-46c1-8816-569367019710	2603	BD213	8	2025-12-15 01:53:19.824348
+88653c65-d71c-47a8-80cc-15d94dc04ace	2606	BD201	8	2025-12-15 01:53:19.855969
+6cb7a2e4-01b5-46d3-aab8-81e6ac00df7c	2606	BD209	8	2025-12-15 01:53:19.85617
+0b5e21a4-3c8c-4eaa-832a-8e0d77633e72	2606	BD212	8	2025-12-15 01:53:19.856315
+b800222f-623c-4441-b4f5-aff2b6c49d06	2606	BD214	8	2025-12-15 01:53:19.856446
+2d8b6f6c-f412-401b-ac84-f99de27269be	2606	BD215	8	2025-12-15 01:53:19.856573
+9a6909b5-5014-4e7a-a9b4-0522b1f4db0e	2609	BD206	8	2025-12-15 01:53:19.88404
+2ef5aed8-93ab-4aa6-bb07-83eb3d0a44ef	2609	BD211	8	2025-12-15 01:53:19.884238
+18a7ed4f-ae4c-4c8d-bb69-7ecb0b2fc283	2612	BD115	8	2025-12-15 01:53:19.916201
+29ccb686-bc78-4aea-b555-5327222a6e0e	2612	BD219	8	2025-12-15 01:53:19.916384
+e81b1bca-33cb-4c0d-b525-27aae821ac30	2615	BD123	8	2025-12-15 01:53:19.945969
+f4ccbcfb-62a7-462e-9aba-df70ff0e7dea	2615	BD135	8	2025-12-15 01:53:19.946168
+6adabfa2-8ed3-4358-b517-f0d81d3fc0c6	2615	BD204	8	2025-12-15 01:53:19.946316
+9df22fb0-c6a7-497d-b5ee-ba8740fa9e4b	2618	BD208	8	2025-12-15 01:53:19.970623
+24c86231-8240-4ee6-820d-a81eca2baad7	2621	BD112	8	2025-12-15 01:53:20.001404
+64953951-9baf-42d1-b3ad-e082cbfcb4f8	2621	BD123	8	2025-12-15 01:53:20.001597
+82002237-930a-4994-8d8e-4e38a5f12947	2621	BD207	8	2025-12-15 01:53:20.00173
+88a62405-eb4f-43e2-a322-870cb238f1fc	2624	BD210	8	2025-12-15 01:53:20.029686
+32a03c52-3286-4702-8527-3869290a65cb	2624	BD213	8	2025-12-15 01:53:20.029922
+38a5fc03-edcf-4d7e-b5bc-136dd2ef071d	2627	BD201	8	2025-12-15 01:53:20.060213
+35cd2045-9370-4fbf-a861-ef5b9760afe5	2627	BD209	8	2025-12-15 01:53:20.060416
+985d1ba7-4f74-4624-abac-92b951882d93	2627	BD214	8	2025-12-15 01:53:20.060577
+d98ae68e-3845-4d58-981d-69881fb04f58	2627	BD215	8	2025-12-15 01:53:20.060746
+70269f69-6b50-454e-98ca-a5db16d22e2b	2630	BD116	8	2025-12-15 01:53:20.087307
+53949323-d5a0-4608-a330-3eb409fbc77f	2630	BD211	8	2025-12-15 01:53:20.087513
+e061a67b-8ee3-4136-a50d-518656aad252	2633	BD202	8	2025-12-15 01:53:20.110481
+0cd5d9e5-7d9c-430c-a33f-67ff158c089d	2633	BD210	8	2025-12-15 01:53:20.110683
+1f6af46b-25f5-44df-b26a-c00d032797ef	2636	BD111	8	2025-12-15 01:53:20.137561
+7ca30fa1-296c-471d-804e-cda42590a5e3	2636	BD135	8	2025-12-15 01:53:20.137794
+62a2d77a-d00f-429c-8ab2-2559fc569c7e	2636	BD218	8	2025-12-15 01:53:20.137949
+7418352f-83fa-474f-b96b-1b3f3f1a6096	2639	BD208	8	2025-12-15 01:53:20.166211
+3daae6f5-3c15-4ac6-889a-6fa6054b7fb9	2639	BD217	8	2025-12-15 01:53:20.166431
+3820aec1-1d82-4513-9994-d2b4ccd9bb82	2642	BD112	8	2025-12-15 01:53:20.193727
+38a70790-8928-448a-8784-96b487be3378	2642	BD204	8	2025-12-15 01:53:20.194029
+f77efc72-ff8a-4dff-9001-34b684640526	2642	BD218	8	2025-12-15 01:53:20.194211
+d16abf96-ec5d-4f22-ac6b-dd3dd32806e2	2645	BD205	8	2025-12-15 01:53:20.220336
+875348f0-c489-48d2-ad7c-e1f30e47520e	2645	BD213	8	2025-12-15 01:53:20.220555
+5145dcce-b811-4258-927a-d586235e6610	2648	BD201	8	2025-12-15 01:53:20.246573
+60c4edc9-89f2-4423-a2f7-931a51275466	2648	BD203	8	2025-12-15 01:53:20.246767
+46fd505e-6722-427b-bdef-bfe31880889d	2648	BD212	8	2025-12-15 01:53:20.246911
+6eec21fe-47e7-4cd5-bd76-b04e083e2b2e	2648	BD214	8	2025-12-15 01:53:20.247039
+a8f815d5-fcfe-40d8-b510-0a95aade6a4b	2648	BD215	8	2025-12-15 01:53:20.247161
+246f548d-fc52-4d13-8e5a-32e060a9dec9	2651	BD116	8	2025-12-15 01:53:20.273106
+0f4a78a0-e013-46ae-88e7-ea6e3b4c90a5	2651	BD211	8	2025-12-15 01:53:20.273298
+352d4fc7-1fbd-4105-988a-3e319b04094c	2654	BD201	8	2025-12-15 01:53:20.296785
+0c1a1f03-0767-4a2c-a83a-1e49ecd10bac	2654	BD211	8	2025-12-15 01:53:20.296987
+5c8e131d-e1c1-48d8-9c7a-2429e1433743	2657	BD111	8	2025-12-15 01:53:20.321961
+e13210f3-896c-45a9-9116-ab398f23c785	2657	BD123	8	2025-12-15 01:53:20.322152
+c82628ed-a774-4d4f-bb29-200aa28b5152	2657	BD204	8	2025-12-15 01:53:20.322297
+b9eb2ba9-cc80-4d21-b12b-e368c1d32c0c	2660	BD208	8	2025-12-15 01:53:20.347798
+4dfb899c-7a9c-4ce3-bf34-c3bc16bba1ca	2660	BD217	8	2025-12-15 01:53:20.348022
+37fccdb4-218f-4cfe-bd69-2fe30dd12849	2663	BD111	8	2025-12-15 01:53:20.377972
+ae86a681-28c4-49a2-800f-a3272e21c92d	2663	BD112	8	2025-12-15 01:53:20.378274
+8f20c7eb-09f0-4480-a215-e5d3ddf1cf9c	2663	BD123	8	2025-12-15 01:53:20.378506
+a1bc0675-f363-4eb4-88d0-a824a6629ef4	2666	BD213	8	2025-12-15 01:53:20.406918
+82134ce8-a7b4-4fa9-9c7a-886b87841023	2666	BD216	8	2025-12-15 01:53:20.407444
+2f4d8879-c901-402c-8386-05ea5c8c6efb	2669	BD216	4	2025-12-15 01:53:20.441328
+de48c9c6-b19e-4185-b562-0ee7921dd99e	2672	BD216	4	2025-12-15 01:53:20.465918
+42eefcee-2bf2-4468-9dc7-31b793028fea	2675	BD216	4	2025-12-15 01:53:20.488565
+08f66663-b1a9-4e4c-a963-adb5ce27503c	2678	BD135	4	2025-12-15 01:53:20.511268
+93be8c1f-aec9-47db-bc1b-d6fb972efa3b	2684	BD112	4	2025-12-15 01:53:20.556527
+2dd5a4d6-5b33-4649-8f74-66c03e94aa69	2687	BD216	4	2025-12-15 01:53:20.580479
+92efeb44-48ba-4abf-935a-e766bc6516af	2690	BD111	4	2025-12-15 01:53:20.60503
+e92c1e88-5b0b-417e-bea4-1bd1acc7e48b	2570	BD202	8	2025-12-15 05:14:18.256149
+fe90a210-fa70-434a-95d0-03350a8031ab	2573	BD135	8	2025-12-15 05:14:18.282245
+d82f8bb7-0702-436f-85d7-b38def1614ec	2573	BD207	8	2025-12-15 05:14:18.282561
+b3a80988-3dc5-4686-91a5-5f0a068bcf31	2576	BD217	8	2025-12-15 05:14:18.309197
+3ebfa361-86c1-41cf-b252-05e77cfdf9d8	2576	BD219	8	2025-12-15 05:14:18.309418
+dda73dbd-38b4-46b7-8f2e-ffc098aeca39	2680	BD216	4	2025-12-15 05:14:18.332343
+ca9a9885-a497-4387-897c-fee510628e6f	2592	BD209	8	2025-12-15 01:53:19.730626
+3caf0678-82ad-430a-a84e-b6376a7ce1ad	2592	BD212	8	2025-12-15 01:53:19.730803
+b438472e-6e4f-4801-9787-c1ad9320b21c	2592	BD214	8	2025-12-15 01:53:19.730981
+b14292ad-1608-42dc-9443-a14aa514ac6e	2592	BD215	8	2025-12-15 01:53:19.731133
+722af4a2-e445-46cc-b097-1382e881e255	2595	BD206	8	2025-12-15 01:53:19.756202
+35754ff7-8ee8-403a-96af-561952a801a8	2595	BD211	8	2025-12-15 01:53:19.756485
+1f3875f1-abc5-4e6e-8b73-4986e0345cb2	2598	BD115	8	2025-12-15 01:53:19.779349
+423520c8-c97b-4c09-bd77-631918ccb321	2598	BD202	8	2025-12-15 01:53:19.779627
+fe04b159-ac08-402e-9e45-1e6e6ff62c2d	2601	BD116	8	2025-12-15 01:53:19.806545
+0322f073-fbef-4e68-917f-8e9ad4d05052	2601	BD204	8	2025-12-15 01:53:19.806747
+93e513b8-53b4-47f9-a914-fcf17bb1852c	2601	BD207	8	2025-12-15 01:53:19.80689
+41fa4ea1-d782-4731-863d-27d48e13d816	2604	BD208	8	2025-12-15 01:53:19.832756
+28236ad4-5929-470d-870a-f68be66b942a	2604	BD217	8	2025-12-15 01:53:19.83295
+c75a3023-d582-49d7-9951-9e7ce5e2fe2b	2607	BD123	8	2025-12-15 01:53:19.866195
+d1730dd2-97b6-4ecc-be73-f21b2dcc69d3	2607	BD135	8	2025-12-15 01:53:19.866393
+0a76ab25-b465-4abd-926e-a3061cbc1c53	2607	BD204	8	2025-12-15 01:53:19.866538
+9bfee094-1a5c-4de2-9dfe-8cd6d6dfca3f	2610	BD205	8	2025-12-15 01:53:19.894928
+b6c76d50-b7ce-4877-b9a5-c199b119db1f	2610	BD213	8	2025-12-15 01:53:19.895332
+82309064-c28f-4581-b5cd-7296865bb5ba	2613	BD201	8	2025-12-15 01:53:19.926103
+5747c234-143e-4541-a6f0-588c6f72e3c3	2613	BD203	8	2025-12-15 01:53:19.926298
+26d20ccf-91ae-4b72-a6a4-dd0be820c4d0	2613	BD214	8	2025-12-15 01:53:19.926437
+d22c914f-d168-4c67-aba0-3d482871f362	2616	BD206	8	2025-12-15 01:53:19.954216
+b210e97b-58cb-4acc-98a8-8e51e59d3151	2616	BD216	8	2025-12-15 01:53:19.954426
+f24e4d50-7ff6-4365-8269-e82bbdfbdc83	2619	BD115	8	2025-12-15 01:53:19.978726
+fad551e3-3441-4cc5-8157-f59e899d6b48	2619	BD202	8	2025-12-15 01:53:19.978918
+119cfe11-700f-4d34-bbef-83ce69ab28ce	2622	BD111	8	2025-12-15 01:53:20.010206
+210fa762-3de6-4b30-8cd0-15f662104606	2622	BD116	8	2025-12-15 01:53:20.010404
+acf33bf8-d457-4e29-9d9b-e7e20a3f9d9b	2625	BD208	8	2025-12-15 01:53:20.042013
+0563b4cd-74b5-4a57-8ef6-f5978ce776bc	2625	BD219	8	2025-12-15 01:53:20.04221
+759d406d-0730-4209-939e-add65b99d7d6	2628	BD112	8	2025-12-15 01:53:20.069813
+2b711e9c-8c8e-48ee-aa2b-bea4e920d952	2628	BD135	8	2025-12-15 01:53:20.070012
+83933316-1f47-43ec-a15c-dc0a58123c1a	2628	BD204	8	2025-12-15 01:53:20.070161
+da142e81-587f-4fad-a611-aedcfdbf0163	2631	BD205	8	2025-12-15 01:53:20.094802
+7d878e63-a712-4493-b018-b5f83ac57cfd	2631	BD210	8	2025-12-15 01:53:20.095003
+865c08eb-a3f3-4c9c-b7cc-811b33f90f19	2634	BD203	8	2025-12-15 01:53:20.118455
+807dcba4-27aa-417d-a07b-70cb462449b7	2634	BD212	8	2025-12-15 01:53:20.118657
+714d8e3f-7cb6-4c61-b741-2a4d9fc8ab25	2634	BD214	8	2025-12-15 01:53:20.118806
+9a92d507-c80a-4e70-92a0-db57875257e2	2634	BD215	8	2025-12-15 01:53:20.118954
+3dbf80b4-f9eb-4ddb-8f5a-7d9573145134	2637	BD116	8	2025-12-15 01:53:20.146343
+1d801565-5fac-41b7-bcef-ca7d15b6cffa	2637	BD206	8	2025-12-15 01:53:20.146546
+93be61a9-4df6-42b9-a2dc-fc878b0cbe34	2640	BD115	8	2025-12-15 01:53:20.175303
+6349dea1-23d0-4d65-8ad4-58dbf13db8b2	2640	BD202	8	2025-12-15 01:53:20.175494
+8a2fc3e4-236d-4db4-8496-7a8fc4b2b6e1	2643	BD112	8	2025-12-15 01:53:20.202928
+14e6c6bf-30a5-4c86-8e75-e3306980117f	2643	BD123	8	2025-12-15 01:53:20.203137
+1696c768-afd1-4f50-94e8-763d432a1f8e	2643	BD207	8	2025-12-15 01:53:20.203311
+5eaadc7e-c53e-420a-a72e-f150b5759d6f	2646	BD208	8	2025-12-15 01:53:20.229538
+ea712ad0-23c6-44cd-8018-af52eac6a1aa	2646	BD217	8	2025-12-15 01:53:20.229753
+b25724e1-fc5c-43e4-8925-3234e51d748e	2649	BD112	8	2025-12-15 01:53:20.255507
+3e4112c0-2797-4168-a129-7fe5b8eda464	2649	BD201	8	2025-12-15 01:53:20.255692
+7e5dea3c-806d-43e4-9311-63d689ca180b	2649	BD218	8	2025-12-15 01:53:20.255834
+a6c26d7c-76a1-4243-a115-7da3b74a82f5	2652	BD213	8	2025-12-15 01:53:20.281211
+db2171f4-f82d-489c-b6b6-9c9b12223b1a	2652	BD216	8	2025-12-15 01:53:20.281403
+3c434916-10af-46d5-b4db-11072cf98f57	2655	BD201	8	2025-12-15 01:53:20.305495
+32cd6bbc-d715-4a9c-b58c-c95364e06716	2655	BD203	8	2025-12-15 01:53:20.30571
+95605167-04e4-4fcc-813a-dddff76e4f9d	2655	BD212	8	2025-12-15 01:53:20.30586
+48255af3-db2f-4abd-9e40-9cf52a46aa04	2655	BD214	8	2025-12-15 01:53:20.305985
+60d4c746-fde6-4bf6-8241-90e8c063c5c7	2655	BD218	8	2025-12-15 01:53:20.306104
+24bf80a2-b58d-40a6-95f9-5a664a0c7a09	2658	BD116	8	2025-12-15 01:53:20.330083
+6af304b3-2e88-482d-b4f6-b77fa87653be	2658	BD211	8	2025-12-15 01:53:20.330258
+f756ce94-b505-4103-8208-e3c4779e91bc	2661	BD203	8	2025-12-15 01:53:20.356588
+ffed8e45-839c-458a-a07b-dcb5de5bf8b7	2661	BD211	8	2025-12-15 01:53:20.356785
+b59ef0c4-304f-4018-be81-43a055bd225e	2664	BD111	8	2025-12-15 01:53:20.387738
+9cf21443-59fe-4c95-b377-016f912421bc	2664	BD112	8	2025-12-15 01:53:20.387934
+15c9fa73-3822-4862-986a-af719fe696e4	2664	BD204	8	2025-12-15 01:53:20.388074
+9c349b62-b795-4c22-a853-bee46a0c4935	2667	BD208	8	2025-12-15 01:53:20.420277
+86f08b2d-a685-4d03-9036-269edd960dc9	2667	BD217	8	2025-12-15 01:53:20.420449
+1551735e-4b9b-4034-a7d2-da432801b70f	2670	BD123	4	2025-12-15 01:53:20.449116
+68a6b4ae-290d-48bb-a782-2df74228fe2e	2673	BD123	4	2025-12-15 01:53:20.473896
+c700f8b0-0c11-49b5-89eb-38123b73d954	2676	BD216	4	2025-12-15 01:53:20.496403
+b8b0de23-2f1b-450d-9a82-2d45f1dac692	2685	BD216	4	2025-12-15 01:53:20.564702
+7a3f2ac8-193c-47bd-ab29-e5a33c3fc73f	2688	BD216	4	2025-12-15 01:53:20.588476
+4df9f32c-4c20-4328-a07f-03e7d84f332f	2691	BD218	4	2025-12-15 01:53:20.612274
+\.
+
+
+--
+-- Data for Name: shift_required_skills; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.shift_required_skills (id, shift_id, skill_id) FROM stdin;
+2451	2452	6
+2452	2453	2
+2453	2454	2
+2454	2455	1
+2455	2456	4
+2456	2457	5
+2457	2458	3
+2458	2459	6
+2459	2460	2
+2460	2461	2
+2461	2462	1
+2462	2463	4
+2463	2464	5
+2464	2465	3
+2465	2466	6
+2466	2467	2
+2467	2468	2
+2468	2469	1
+2469	2470	4
+2470	2471	5
+2471	2472	3
+2472	2473	6
+2473	2474	2
+2474	2475	2
+2475	2476	1
+2476	2477	4
+2477	2478	5
+2478	2479	3
+2479	2480	6
+2480	2481	2
+2481	2482	2
+2482	2483	1
+2483	2484	4
+2484	2485	5
+2485	2486	3
+2486	2487	6
+2487	2488	2
+2488	2489	2
+2489	2490	1
+2490	2491	4
+2491	2492	5
+2492	2493	3
+2493	2494	6
+2494	2495	2
+2495	2496	2
+2496	2497	1
+2497	2498	4
+2498	2499	5
+2499	2500	3
+2500	2501	6
+2501	2502	2
+2502	2503	2
+2503	2504	1
+2504	2505	4
+2505	2506	5
+2506	2507	3
+2507	2508	6
+2508	2509	2
+2509	2510	2
+2510	2511	1
+2511	2512	4
+2512	2513	5
+2513	2514	3
+2514	2515	6
+2515	2516	2
+2516	2517	2
+2517	2518	1
+2518	2519	4
+2519	2520	5
+2520	2521	3
+2521	2522	6
+2522	2523	2
+2523	2524	2
+2524	2525	1
+2525	2526	4
+2526	2527	5
+2527	2528	3
+2528	2529	6
+2529	2530	2
+2530	2531	2
+2531	2532	1
+2532	2533	4
+2533	2534	5
+2534	2535	3
+2535	2536	6
+2536	2537	2
+2537	2538	2
+2538	2539	1
+2539	2540	4
+2540	2541	5
+2541	2542	3
+2542	2543	6
+2543	2544	2
+2544	2545	2
+2545	2546	1
+2546	2547	4
+2547	2548	5
+2548	2549	3
+2549	2550	6
+2550	2551	2
+2551	2552	2
+2552	2553	1
+2553	2554	4
+2554	2555	5
+2555	2556	3
+2556	2557	6
+2557	2558	2
+2558	2559	2
+2559	2560	1
+2560	2561	4
+2561	2562	5
+2562	2563	3
+2563	2564	6
+2564	2565	2
+2565	2566	2
+2566	2567	1
+2567	2568	4
+2568	2569	5
+2569	2570	3
+2570	2571	6
+2571	2572	2
+2572	2573	2
+2573	2574	1
+2574	2575	4
+2575	2576	5
+2576	2577	3
+2577	2578	6
+2578	2579	2
+2579	2580	2
+2580	2581	1
+2581	2582	4
+2582	2583	5
+2583	2584	3
+2584	2585	6
+2585	2586	2
+2586	2587	2
+2587	2588	1
+2588	2589	4
+2589	2590	5
+2590	2591	3
+2591	2592	6
+2592	2593	2
+2593	2594	2
+2594	2595	1
+2595	2596	4
+2596	2597	5
+2597	2598	3
+2598	2599	6
+2599	2600	2
+2600	2601	2
+2601	2602	1
+2602	2603	4
+2603	2604	5
+2604	2605	3
+2605	2606	6
+2606	2607	2
+2607	2608	2
+2608	2609	1
+2609	2610	4
+2610	2611	5
+2611	2612	3
+2612	2613	6
+2613	2614	2
+2614	2615	2
+2615	2616	1
+2616	2617	4
+2617	2618	5
+2618	2619	3
+2619	2620	6
+2620	2621	2
+2621	2622	2
+2622	2623	1
+2623	2624	4
+2624	2625	5
+2625	2626	3
+2626	2627	6
+2627	2628	2
+2628	2629	2
+2629	2630	1
+2630	2631	4
+2631	2632	5
+2632	2633	3
+2633	2634	6
+2634	2635	2
+2635	2636	2
+2636	2637	1
+2637	2638	4
+2638	2639	5
+2639	2640	3
+2640	2641	6
+2641	2642	2
+2642	2643	2
+2643	2644	1
+2644	2645	4
+2645	2646	5
+2646	2647	3
+2647	2648	6
+2648	2649	2
+2649	2650	2
+2650	2651	1
+2651	2652	4
+2652	2653	5
+2653	2654	3
+2654	2655	6
+2655	2656	2
+2656	2657	2
+2657	2658	1
+2658	2659	4
+2659	2660	5
+2660	2661	3
+2661	2662	6
+2662	2663	2
+2663	2664	2
+2664	2665	1
+2665	2666	4
+2666	2667	5
+2667	2668	3
+2668	2669	2
+2669	2670	2
+2670	2671	2
+2671	2672	2
+2672	2673	2
+2673	2674	2
+2674	2675	2
+2675	2676	2
+2676	2677	2
+2677	2678	2
+2678	2679	2
+2679	2680	2
+2680	2681	2
+2681	2682	2
+2682	2683	2
+2683	2684	2
+2684	2685	2
+2685	2686	2
+2686	2687	2
+2687	2688	2
+2688	2689	2
+2689	2690	2
+2690	2691	2
+\.
+
+
+--
+-- Data for Name: shifts; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.shifts (id, org_id, shift_date, shift_type, department_id, min_staff, max_staff, priority, requires_supervisor, hours) FROM stdin;
+2452	2	2025-12-01	DAY	6	3	5	3	f	8
+2453	2	2025-12-01	DAY	1	2	3	3	f	8
+2454	2	2025-12-01	EVENING	1	2	3	3	f	8
+2455	2	2025-12-01	DAY	2	1	2	3	f	8
+2456	2	2025-12-01	EVENING	4	1	2	2	f	8
+2457	2	2025-12-01	EVENING	7	1	2	2	f	8
+2458	2	2025-12-01	EVENING	3	1	2	2	f	8
+2459	2	2025-12-02	DAY	6	3	5	3	f	8
+2460	2	2025-12-02	DAY	1	2	3	3	f	8
+2461	2	2025-12-02	EVENING	1	2	3	3	f	8
+2462	2	2025-12-02	DAY	2	1	2	3	f	8
+2463	2	2025-12-02	EVENING	4	1	2	2	f	8
+2464	2	2025-12-02	EVENING	7	1	2	2	f	8
+2465	2	2025-12-02	EVENING	3	1	2	2	f	8
+2466	2	2025-12-03	DAY	6	3	5	3	f	8
+2467	2	2025-12-03	DAY	1	2	3	3	f	8
+2468	2	2025-12-03	EVENING	1	2	3	3	f	8
+2469	2	2025-12-03	DAY	2	1	2	3	f	8
+2470	2	2025-12-03	EVENING	4	1	2	2	f	8
+2471	2	2025-12-03	EVENING	7	1	2	2	f	8
+2472	2	2025-12-03	EVENING	3	1	2	2	f	8
+2473	2	2025-12-04	DAY	6	3	5	3	f	8
+2474	2	2025-12-04	DAY	1	2	3	3	f	8
+2475	2	2025-12-04	EVENING	1	2	3	3	f	8
+2476	2	2025-12-04	DAY	2	1	2	3	f	8
+2477	2	2025-12-04	EVENING	4	1	2	2	f	8
+2478	2	2025-12-04	EVENING	7	1	2	2	f	8
+2479	2	2025-12-04	EVENING	3	1	2	2	f	8
+2480	2	2025-12-05	DAY	6	3	5	3	f	8
+2481	2	2025-12-05	DAY	1	2	3	3	f	8
+2482	2	2025-12-05	EVENING	1	2	3	3	f	8
+2483	2	2025-12-05	DAY	2	1	2	3	f	8
+2484	2	2025-12-05	EVENING	4	1	2	2	f	8
+2485	2	2025-12-05	EVENING	7	1	2	2	f	8
+2486	2	2025-12-05	EVENING	3	1	2	2	f	8
+2487	2	2025-12-06	DAY	6	3	5	3	f	8
+2488	2	2025-12-06	DAY	1	2	3	3	f	8
+2489	2	2025-12-06	EVENING	1	2	3	3	f	8
+2490	2	2025-12-06	DAY	2	1	2	3	f	8
+2491	2	2025-12-06	EVENING	4	1	2	2	f	8
+2492	2	2025-12-06	EVENING	7	1	2	2	f	8
+2493	2	2025-12-06	EVENING	3	1	2	2	f	8
+2494	2	2025-12-07	DAY	6	3	5	3	f	8
+2495	2	2025-12-07	DAY	1	2	3	3	f	8
+2496	2	2025-12-07	EVENING	1	2	3	3	f	8
+2497	2	2025-12-07	DAY	2	1	2	3	f	8
+2498	2	2025-12-07	EVENING	4	1	2	2	f	8
+2499	2	2025-12-07	EVENING	7	1	2	2	f	8
+2500	2	2025-12-07	EVENING	3	1	2	2	f	8
+2501	2	2025-12-08	DAY	6	3	5	3	f	8
+2502	2	2025-12-08	DAY	1	2	3	3	f	8
+2503	2	2025-12-08	EVENING	1	2	3	3	f	8
+2504	2	2025-12-08	DAY	2	1	2	3	f	8
+2505	2	2025-12-08	EVENING	4	1	2	2	f	8
+2506	2	2025-12-08	EVENING	7	1	2	2	f	8
+2507	2	2025-12-08	EVENING	3	1	2	2	f	8
+2508	2	2025-12-09	DAY	6	3	5	3	f	8
+2509	2	2025-12-09	DAY	1	2	3	3	f	8
+2510	2	2025-12-09	EVENING	1	2	3	3	f	8
+2511	2	2025-12-09	DAY	2	1	2	3	f	8
+2512	2	2025-12-09	EVENING	4	1	2	2	f	8
+2513	2	2025-12-09	EVENING	7	1	2	2	f	8
+2514	2	2025-12-09	EVENING	3	1	2	2	f	8
+2515	2	2025-12-10	DAY	6	3	5	3	f	8
+2516	2	2025-12-10	DAY	1	2	3	3	f	8
+2517	2	2025-12-10	EVENING	1	2	3	3	f	8
+2518	2	2025-12-10	DAY	2	1	2	3	f	8
+2519	2	2025-12-10	EVENING	4	1	2	2	f	8
+2520	2	2025-12-10	EVENING	7	1	2	2	f	8
+2521	2	2025-12-10	EVENING	3	1	2	2	f	8
+2522	2	2025-12-11	DAY	6	3	5	3	f	8
+2523	2	2025-12-11	DAY	1	2	3	3	f	8
+2524	2	2025-12-11	EVENING	1	2	3	3	f	8
+2525	2	2025-12-11	DAY	2	1	2	3	f	8
+2526	2	2025-12-11	EVENING	4	1	2	2	f	8
+2527	2	2025-12-11	EVENING	7	1	2	2	f	8
+2528	2	2025-12-11	EVENING	3	1	2	2	f	8
+2529	2	2025-12-12	DAY	6	3	5	3	f	8
+2530	2	2025-12-12	DAY	1	2	3	3	f	8
+2531	2	2025-12-12	EVENING	1	2	3	3	f	8
+2532	2	2025-12-12	DAY	2	1	2	3	f	8
+2533	2	2025-12-12	EVENING	4	1	2	2	f	8
+2534	2	2025-12-12	EVENING	7	1	2	2	f	8
+2535	2	2025-12-12	EVENING	3	1	2	2	f	8
+2536	2	2025-12-13	DAY	6	3	5	3	f	8
+2537	2	2025-12-13	DAY	1	2	3	3	f	8
+2538	2	2025-12-13	EVENING	1	2	3	3	f	8
+2539	2	2025-12-13	DAY	2	1	2	3	f	8
+2540	2	2025-12-13	EVENING	4	1	2	2	f	8
+2541	2	2025-12-13	EVENING	7	1	2	2	f	8
+2542	2	2025-12-13	EVENING	3	1	2	2	f	8
+2543	2	2025-12-14	DAY	6	3	5	3	f	8
+2544	2	2025-12-14	DAY	1	2	3	3	f	8
+2545	2	2025-12-14	EVENING	1	2	3	3	f	8
+2546	2	2025-12-14	DAY	2	1	2	3	f	8
+2547	2	2025-12-14	EVENING	4	1	2	2	f	8
+2548	2	2025-12-14	EVENING	7	1	2	2	f	8
+2549	2	2025-12-14	EVENING	3	1	2	2	f	8
+2550	2	2025-12-15	DAY	6	3	5	3	f	8
+2551	2	2025-12-15	DAY	1	2	3	3	f	8
+2552	2	2025-12-15	EVENING	1	2	3	3	f	8
+2553	2	2025-12-15	DAY	2	1	2	3	f	8
+2554	2	2025-12-15	EVENING	4	1	2	2	f	8
+2555	2	2025-12-15	EVENING	7	1	2	2	f	8
+2556	2	2025-12-15	EVENING	3	1	2	2	f	8
+2557	2	2025-12-16	DAY	6	3	5	3	f	8
+2558	2	2025-12-16	DAY	1	2	3	3	f	8
+2559	2	2025-12-16	EVENING	1	2	3	3	f	8
+2560	2	2025-12-16	DAY	2	1	2	3	f	8
+2561	2	2025-12-16	EVENING	4	1	2	2	f	8
+2562	2	2025-12-16	EVENING	7	1	2	2	f	8
+2563	2	2025-12-16	EVENING	3	1	2	2	f	8
+2564	2	2025-12-17	DAY	6	3	5	3	f	8
+2565	2	2025-12-17	DAY	1	2	3	3	f	8
+2566	2	2025-12-17	EVENING	1	2	3	3	f	8
+2567	2	2025-12-17	DAY	2	1	2	3	f	8
+2568	2	2025-12-17	EVENING	4	1	2	2	f	8
+2569	2	2025-12-17	EVENING	7	1	2	2	f	8
+2570	2	2025-12-17	EVENING	3	1	2	2	f	8
+2571	2	2025-12-18	DAY	6	3	5	3	f	8
+2572	2	2025-12-18	DAY	1	2	3	3	f	8
+2573	2	2025-12-18	EVENING	1	2	3	3	f	8
+2574	2	2025-12-18	DAY	2	1	2	3	f	8
+2575	2	2025-12-18	EVENING	4	1	2	2	f	8
+2576	2	2025-12-18	EVENING	7	1	2	2	f	8
+2577	2	2025-12-18	EVENING	3	1	2	2	f	8
+2578	2	2025-12-19	DAY	6	3	5	3	f	8
+2579	2	2025-12-19	DAY	1	2	3	3	f	8
+2580	2	2025-12-19	EVENING	1	2	3	3	f	8
+2581	2	2025-12-19	DAY	2	1	2	3	f	8
+2582	2	2025-12-19	EVENING	4	1	2	2	f	8
+2583	2	2025-12-19	EVENING	7	1	2	2	f	8
+2584	2	2025-12-19	EVENING	3	1	2	2	f	8
+2585	2	2025-12-20	DAY	6	3	5	3	f	8
+2586	2	2025-12-20	DAY	1	2	3	3	f	8
+2587	2	2025-12-20	EVENING	1	2	3	3	f	8
+2588	2	2025-12-20	DAY	2	1	2	3	f	8
+2589	2	2025-12-20	EVENING	4	1	2	2	f	8
+2590	2	2025-12-20	EVENING	7	1	2	2	f	8
+2591	2	2025-12-20	EVENING	3	1	2	2	f	8
+2592	2	2025-12-21	DAY	6	3	5	3	f	8
+2593	2	2025-12-21	DAY	1	2	3	3	f	8
+2594	2	2025-12-21	EVENING	1	2	3	3	f	8
+2595	2	2025-12-21	DAY	2	1	2	3	f	8
+2596	2	2025-12-21	EVENING	4	1	2	2	f	8
+2597	2	2025-12-21	EVENING	7	1	2	2	f	8
+2598	2	2025-12-21	EVENING	3	1	2	2	f	8
+2599	2	2025-12-22	DAY	6	3	5	3	f	8
+2600	2	2025-12-22	DAY	1	2	3	3	f	8
+2601	2	2025-12-22	EVENING	1	2	3	3	f	8
+2602	2	2025-12-22	DAY	2	1	2	3	f	8
+2603	2	2025-12-22	EVENING	4	1	2	2	f	8
+2604	2	2025-12-22	EVENING	7	1	2	2	f	8
+2605	2	2025-12-22	EVENING	3	1	2	2	f	8
+2606	2	2025-12-23	DAY	6	3	5	3	f	8
+2607	2	2025-12-23	DAY	1	2	3	3	f	8
+2608	2	2025-12-23	EVENING	1	2	3	3	f	8
+2609	2	2025-12-23	DAY	2	1	2	3	f	8
+2610	2	2025-12-23	EVENING	4	1	2	2	f	8
+2611	2	2025-12-23	EVENING	7	1	2	2	f	8
+2612	2	2025-12-23	EVENING	3	1	2	2	f	8
+2613	2	2025-12-24	DAY	6	3	5	3	f	8
+2614	2	2025-12-24	DAY	1	2	3	3	f	8
+2615	2	2025-12-24	EVENING	1	2	3	3	f	8
+2616	2	2025-12-24	DAY	2	1	2	3	f	8
+2617	2	2025-12-24	EVENING	4	1	2	2	f	8
+2618	2	2025-12-24	EVENING	7	1	2	2	f	8
+2619	2	2025-12-24	EVENING	3	1	2	2	f	8
+2620	2	2025-12-25	DAY	6	3	5	3	f	8
+2621	2	2025-12-25	DAY	1	2	3	3	f	8
+2622	2	2025-12-25	EVENING	1	2	3	3	f	8
+2623	2	2025-12-25	DAY	2	1	2	3	f	8
+2624	2	2025-12-25	EVENING	4	1	2	2	f	8
+2625	2	2025-12-25	EVENING	7	1	2	2	f	8
+2626	2	2025-12-25	EVENING	3	1	2	2	f	8
+2627	2	2025-12-26	DAY	6	3	5	3	f	8
+2628	2	2025-12-26	DAY	1	2	3	3	f	8
+2629	2	2025-12-26	EVENING	1	2	3	3	f	8
+2630	2	2025-12-26	DAY	2	1	2	3	f	8
+2631	2	2025-12-26	EVENING	4	1	2	2	f	8
+2632	2	2025-12-26	EVENING	7	1	2	2	f	8
+2633	2	2025-12-26	EVENING	3	1	2	2	f	8
+2634	2	2025-12-27	DAY	6	3	5	3	f	8
+2635	2	2025-12-27	DAY	1	2	3	3	f	8
+2636	2	2025-12-27	EVENING	1	2	3	3	f	8
+2637	2	2025-12-27	DAY	2	1	2	3	f	8
+2638	2	2025-12-27	EVENING	4	1	2	2	f	8
+2639	2	2025-12-27	EVENING	7	1	2	2	f	8
+2640	2	2025-12-27	EVENING	3	1	2	2	f	8
+2641	2	2025-12-28	DAY	6	3	5	3	f	8
+2642	2	2025-12-28	DAY	1	2	3	3	f	8
+2643	2	2025-12-28	EVENING	1	2	3	3	f	8
+2644	2	2025-12-28	DAY	2	1	2	3	f	8
+2645	2	2025-12-28	EVENING	4	1	2	2	f	8
+2646	2	2025-12-28	EVENING	7	1	2	2	f	8
+2647	2	2025-12-28	EVENING	3	1	2	2	f	8
+2648	2	2025-12-29	DAY	6	3	5	3	f	8
+2649	2	2025-12-29	DAY	1	2	3	3	f	8
+2650	2	2025-12-29	EVENING	1	2	3	3	f	8
+2651	2	2025-12-29	DAY	2	1	2	3	f	8
+2652	2	2025-12-29	EVENING	4	1	2	2	f	8
+2653	2	2025-12-29	EVENING	7	1	2	2	f	8
+2654	2	2025-12-29	EVENING	3	1	2	2	f	8
+2655	2	2025-12-30	DAY	6	3	5	3	f	8
+2656	2	2025-12-30	DAY	1	2	3	3	f	8
+2657	2	2025-12-30	EVENING	1	2	3	3	f	8
+2658	2	2025-12-30	DAY	2	1	2	3	f	8
+2659	2	2025-12-30	EVENING	4	1	2	2	f	8
+2660	2	2025-12-30	EVENING	7	1	2	2	f	8
+2661	2	2025-12-30	EVENING	3	1	2	2	f	8
+2662	2	2025-12-31	DAY	6	3	5	3	f	8
+2663	2	2025-12-31	DAY	1	2	3	3	f	8
+2664	2	2025-12-31	EVENING	1	2	3	3	f	8
+2665	2	2025-12-31	DAY	2	1	2	3	f	8
+2666	2	2025-12-31	EVENING	4	1	2	2	f	8
+2667	2	2025-12-31	EVENING	7	1	2	2	f	8
+2668	2	2025-12-31	EVENING	3	1	2	2	f	8
+2669	2	2025-12-01	DAY	1	1	1	4	f	4
+2670	2	2025-12-02	DAY	1	1	1	4	f	4
+2671	2	2025-12-03	DAY	1	1	1	4	f	4
+2672	2	2025-12-04	DAY	1	1	1	4	f	4
+2673	2	2025-12-05	DAY	1	1	1	4	f	4
+2674	2	2025-12-08	DAY	1	1	1	4	f	4
+2675	2	2025-12-09	DAY	1	1	1	4	f	4
+2676	2	2025-12-10	DAY	1	1	1	4	f	4
+2677	2	2025-12-11	DAY	1	1	1	4	f	4
+2678	2	2025-12-12	DAY	1	1	1	4	f	4
+2679	2	2025-12-15	DAY	1	1	1	4	f	4
+2680	2	2025-12-16	DAY	1	1	1	4	f	4
+2681	2	2025-12-17	DAY	1	1	1	4	f	4
+2682	2	2025-12-18	DAY	1	1	1	4	f	4
+2683	2	2025-12-19	DAY	1	1	1	4	f	4
+2684	2	2025-12-22	DAY	1	1	1	4	f	4
+2685	2	2025-12-23	DAY	1	1	1	4	f	4
+2686	2	2025-12-24	DAY	1	1	1	4	f	4
+2687	2	2025-12-25	DAY	1	1	1	4	f	4
+2688	2	2025-12-26	DAY	1	1	1	4	f	4
+2689	2	2025-12-29	DAY	1	1	1	4	f	4
+2690	2	2025-12-30	DAY	1	1	1	4	f	4
+2691	2	2025-12-31	DAY	1	1	1	4	f	4
+\.
+
+
+--
+-- Data for Name: skills; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.skills (id, department_id, skill_name, required_certification) FROM stdin;
+1	2	Microbiology Culture	Microbiology Tech
+2	1	Hematology Analysis	CBC Specialist
+3	3	Chemistry Analysis	Clinical Chemistry
+4	4	Immunoassay Testing	Immunology Tech
+5	7	Blood Typing	Blood Bank Tech
+6	6	PCR Testing	Molecular Biology
+\.
+
+
+--
+-- Data for Name: staff; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.staff (employee_id, org_id, full_name, email, phone, role, max_hours_per_week, is_supervisor, created_at) FROM stdin;
+BD111	2	Nur Aliyah Binte	nuraliyah@biohospital.sg	+65-9123-4567	MANAGER	40	t	2025-12-07 11:58:33.113096
+BD112	2	Tashna	tashna@biohospital.sg	+65-8213-9145	STAFF	40	f	2025-12-07 12:13:51.038898
+BD114	2	Soon Chin	soonchin@biohospital.sg	+65-8112-7835	STAFF	40	f	2025-12-07 12:14:59.866115
+BD115	2	Khairunnisa	khairunnisa@biohospital.sg	+65-9123-4572	STAFF	40	f	2025-12-07 15:12:16.963543
+BD116	2	Ga Jules Angelo	angelo@biohospital.sg	+65-9123-4573	STAFF	40	f	2025-12-07 15:13:11.773461
+BD123	2	Charmian	charmian@biohospital.sg	+65-9123-4583	MANAGER	40	t	2025-12-07 15:14:21.104511
+BD135	2	Siti Na'ilah Binte	sitinb@biohospital.sg	+65-9163-4583	STAFF	40	f	2025-12-07 15:15:33.036398
+BD201	2	Nur Batrishah Ilyana Binte	nur.batrishah@biohospital.sg	+65-9001-0001	MANAGER	40	t	2025-12-08 06:16:25.886308
+BD202	2	Ga-ang Jason	jason.gaang@biohospital.sg	+65-9001-0002	STAFF	40	f	2025-12-08 06:16:57.794122
+BD203	2	Palaniselvam	palaniselvam@biohospital.sg	+65-9001-0003	MANAGER	40	t	2025-12-08 06:17:05.282103
+BD204	2	Chok Suet	chok.suet@biohospital.sg	+65-9001-0004	STAFF	40	f	2025-12-08 06:17:11.858805
+BD205	2	Prashnah	prashnah@biohospital.sg	+65-9001-0005	STAFF	40	f	2025-12-08 06:17:24.376204
+BD206	2	Koo Yi	kooyi@biohospital.sg	+65-9001-0006	STAFF	40	f	2025-12-08 06:17:32.855775
+BD207	2	Teo Hui Yee	teo.huiyee@biohospital.sg	+65-9001-0007	STAFF	40	f	2025-12-08 06:17:48.862664
+BD208	2	Avettra	avettra@biohospital.sg	+65-9001-0008	STAFF	40	f	2025-12-08 06:17:57.202832
+BD209	2	Rohanraj	rohanraj@biohospital.sg	+65-9001-0009	STAFF	40	f	2025-12-08 06:18:05.877077
+BD210	2	Munirah Binte	munirah@biohospital.sg	+65-9001-0010	STAFF	40	f	2025-12-08 06:18:12.13238
+BD211	2	Alyssa Binte Ali	alyssa.ali@biohospital.sg	+65-9001-0011	MANAGER	40	t	2025-12-08 06:18:19.921908
+BD212	2	Tan Boon	tan.boon@biohospital.sg	+65-9001-0012	STAFF	40	f	2025-12-08 06:18:26.707892
+BD213	2	Teo Kai	teo.kai@biohospital.sg	+65-9001-0013	STAFF	40	f	2025-12-08 06:18:33.079152
+BD214	2	Ryan Alphonsus Koh Yu	ryan.kohyu@biohospital.sg	+65-9001-0014	STAFF	40	f	2025-12-08 06:18:41.171751
+BD215	2	Chee Hong	chee.hong@biohospital.sg	+65-9001-0015	STAFF	40	f	2025-12-08 06:18:47.286991
+BD216	2	Suzzana Binte	suzzana@biohospital.sg	+65-9001-0016	STAFF	40	f	2025-12-08 06:18:54.902562
+BD217	2	Eleena Seow Wai	eleena.seowwai@biohospital.sg	+65-9001-0017	STAFF	40	f	2025-12-08 06:19:01.274813
+BD218	2	Lee Boon	lee.boon@biohospital.sg	+65-9001-0018	MANAGER	40	t	2025-12-08 06:19:07.414512
+BD219	2	Luceri Monica	luceri.monica@biohospital.sg	+65-9001-0019	STAFF	40	f	2025-12-08 06:19:15.96851
+BD312	2	John Doe	johndoe@hospital.sg	+65 2344-0987	STAFF	40	f	2025-12-10 18:26:00.81535
+\.
+
+
+--
+-- Data for Name: staff_skills; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.staff_skills (id, employee_id, skill_id, proficiency_level) FROM stdin;
+30	BD111	2	EXPERT
+31	BD111	4	ADVANCED
+32	BD111	3	ADVANCED
+33	BD112	1	BASIC
+34	BD112	2	ADVANCED
+35	BD112	3	INTERMEDIATE
+36	BD114	1	ADVANCED
+37	BD114	2	INTERMEDIATE
+38	BD114	3	ADVANCED
+39	BD115	3	INTERMEDIATE
+40	BD115	1	BASIC
+42	BD115	4	BASIC
+43	BD116	2	INTERMEDIATE
+44	BD116	1	EXPERT
+45	BD116	3	INTERMEDIATE
+46	BD123	1	EXPERT
+47	BD123	2	ADVANCED
+48	BD123	3	ADVANCED
+49	BD135	2	BASIC
+50	BD135	1	INTERMEDIATE
+51	BD135	4	BASIC
+52	BD201	3	EXPERT
+53	BD201	2	ADVANCED
+54	BD201	6	ADVANCED
+55	BD202	3	ADVANCED
+56	BD202	1	BASIC
+57	BD202	4	BASIC
+58	BD203	3	EXPERT
+59	BD203	6	ADVANCED
+60	BD203	2	ADVANCED
+61	BD204	2	ADVANCED
+62	BD204	1	INTERMEDIATE
+63	BD204	3	BASIC
+64	BD205	4	INTERMEDIATE
+65	BD205	3	BASIC
+66	BD206	5	BASIC
+67	BD206	1	ADVANCED
+68	BD206	3	INTERMEDIATE
+69	BD207	2	INTERMEDIATE
+70	BD207	6	BASIC
+71	BD208	3	BASIC
+72	BD208	5	ADVANCED
+73	BD208	1	INTERMEDIATE
+74	BD209	4	INTERMEDIATE
+75	BD209	6	BASIC
+76	BD209	3	BASIC
+77	BD210	3	ADVANCED
+78	BD210	1	BASIC
+79	BD210	4	INTERMEDIATE
+80	BD211	1	EXPERT
+81	BD211	3	EXPERT
+82	BD211	4	ADVANCED
+83	BD212	2	BASIC
+84	BD212	6	INTERMEDIATE
+85	BD212	3	BASIC
+86	BD213	3	BASIC
+87	BD213	4	ADVANCED
+88	BD213	1	BASIC
+89	BD214	6	INTERMEDIATE
+90	BD214	3	BASIC
+91	BD214	1	BASIC
+92	BD215	3	ADVANCED
+93	BD215	6	INTERMEDIATE
+94	BD215	2	BASIC
+95	BD216	2	INTERMEDIATE
+96	BD216	1	EXPERT
+97	BD216	4	ADVANCED
+98	BD217	2	BASIC
+99	BD217	5	INTERMEDIATE
+100	BD217	1	BASIC
+102	BD218	2	EXPERT
+103	BD218	1	ADVANCED
+104	BD218	6	ADVANCED
+105	BD219	3	ADVANCED
+106	BD219	5	BASIC
+107	BD219	1	BASIC
+\.
+
+
+--
+-- Data for Name: work_pipelines; Type: TABLE DATA; Schema: scheduler_dev; Owner: -
+--
+
+COPY scheduler_dev.work_pipelines (id, org_id, name, department_id, start_date, end_date, estimated_staff_hours, is_recurring, recurrence_days, priority) FROM stdin;
+14	2	Morning Lab Testing	1	2025-12-01	2025-12-31	4	t	[0, 1, 2, 3, 4]	4
+\.
+
+
+--
+-- Name: departments_id_seq; Type: SEQUENCE SET; Schema: scheduler_dev; Owner: -
+--
+
+SELECT pg_catalog.setval('scheduler_dev.departments_id_seq', 7, true);
+
+
+--
+-- Name: organizations_id_seq; Type: SEQUENCE SET; Schema: scheduler_dev; Owner: -
+--
+
+SELECT pg_catalog.setval('scheduler_dev.organizations_id_seq', 2, true);
+
+
+--
+-- Name: pipeline_required_skills_id_seq; Type: SEQUENCE SET; Schema: scheduler_dev; Owner: -
+--
+
+SELECT pg_catalog.setval('scheduler_dev.pipeline_required_skills_id_seq', 14, true);
+
+
+--
+-- Name: shift_required_skills_id_seq; Type: SEQUENCE SET; Schema: scheduler_dev; Owner: -
+--
+
+SELECT pg_catalog.setval('scheduler_dev.shift_required_skills_id_seq', 2690, true);
+
+
+--
+-- Name: shifts_id_seq; Type: SEQUENCE SET; Schema: scheduler_dev; Owner: -
+--
+
+SELECT pg_catalog.setval('scheduler_dev.shifts_id_seq', 2691, true);
+
+
+--
+-- Name: skills_id_seq; Type: SEQUENCE SET; Schema: scheduler_dev; Owner: -
+--
+
+SELECT pg_catalog.setval('scheduler_dev.skills_id_seq', 6, true);
+
+
+--
+-- Name: staff_skills_id_seq; Type: SEQUENCE SET; Schema: scheduler_dev; Owner: -
+--
+
+SELECT pg_catalog.setval('scheduler_dev.staff_skills_id_seq', 107, true);
+
+
+--
+-- Name: work_pipelines_id_seq; Type: SEQUENCE SET; Schema: scheduler_dev; Owner: -
+--
+
+SELECT pg_catalog.setval('scheduler_dev.work_pipelines_id_seq', 14, true);
+
+
+--
+-- Name: auth_users auth_users_email_key; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.auth_users
+    ADD CONSTRAINT auth_users_email_key UNIQUE (email);
+
+
+--
+-- Name: auth_users auth_users_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.auth_users
+    ADD CONSTRAINT auth_users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auth_users auth_users_username_key; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.auth_users
+    ADD CONSTRAINT auth_users_username_key UNIQUE (username);
+
+
+--
+-- Name: departments departments_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.departments
+    ADD CONSTRAINT departments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: leave_requests leave_requests_leave_code_key; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.leave_requests
+    ADD CONSTRAINT leave_requests_leave_code_key UNIQUE (leave_code);
+
+
+--
+-- Name: leave_requests leave_requests_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.leave_requests
+    ADD CONSTRAINT leave_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: organizations organizations_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.organizations
+    ADD CONSTRAINT organizations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: organizations organizations_slug_key; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.organizations
+    ADD CONSTRAINT organizations_slug_key UNIQUE (slug);
+
+
+--
+-- Name: pipeline_required_skills pipeline_required_skills_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.pipeline_required_skills
+    ADD CONSTRAINT pipeline_required_skills_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: shift_assignments shift_assignments_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shift_assignments
+    ADD CONSTRAINT shift_assignments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: shift_assignments shift_assignments_shift_id_employee_id_key; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shift_assignments
+    ADD CONSTRAINT shift_assignments_shift_id_employee_id_key UNIQUE (shift_id, employee_id);
+
+
+--
+-- Name: shift_required_skills shift_required_skills_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shift_required_skills
+    ADD CONSTRAINT shift_required_skills_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: shifts shifts_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shifts
+    ADD CONSTRAINT shifts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: skills skills_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.skills
+    ADD CONSTRAINT skills_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: staff staff_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.staff
+    ADD CONSTRAINT staff_pkey PRIMARY KEY (employee_id);
+
+
+--
+-- Name: staff_skills staff_skills_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.staff_skills
+    ADD CONSTRAINT staff_skills_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: work_pipelines work_pipelines_pkey; Type: CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.work_pipelines
+    ADD CONSTRAINT work_pipelines_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: departments departments_org_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.departments
+    ADD CONSTRAINT departments_org_id_fkey FOREIGN KEY (org_id) REFERENCES scheduler_dev.organizations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: auth_users fk_auth_staff; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.auth_users
+    ADD CONSTRAINT fk_auth_staff FOREIGN KEY (employee_id) REFERENCES scheduler_dev.staff(employee_id) ON DELETE SET NULL;
+
+
+--
+-- Name: leave_requests leave_requests_employee_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.leave_requests
+    ADD CONSTRAINT leave_requests_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES scheduler_dev.staff(employee_id) ON DELETE CASCADE;
+
+
+--
+-- Name: pipeline_required_skills pipeline_required_skills_pipeline_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.pipeline_required_skills
+    ADD CONSTRAINT pipeline_required_skills_pipeline_id_fkey FOREIGN KEY (pipeline_id) REFERENCES scheduler_dev.work_pipelines(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pipeline_required_skills pipeline_required_skills_skill_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.pipeline_required_skills
+    ADD CONSTRAINT pipeline_required_skills_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES scheduler_dev.skills(id) ON DELETE CASCADE;
+
+
+--
+-- Name: shift_assignments shift_assignments_employee_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shift_assignments
+    ADD CONSTRAINT shift_assignments_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES scheduler_dev.staff(employee_id) ON DELETE CASCADE;
+
+
+--
+-- Name: shift_assignments shift_assignments_shift_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shift_assignments
+    ADD CONSTRAINT shift_assignments_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES scheduler_dev.shifts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: shift_required_skills shift_required_skills_shift_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shift_required_skills
+    ADD CONSTRAINT shift_required_skills_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES scheduler_dev.shifts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: shift_required_skills shift_required_skills_skill_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shift_required_skills
+    ADD CONSTRAINT shift_required_skills_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES scheduler_dev.skills(id) ON DELETE CASCADE;
+
+
+--
+-- Name: shifts shifts_department_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shifts
+    ADD CONSTRAINT shifts_department_id_fkey FOREIGN KEY (department_id) REFERENCES scheduler_dev.departments(id);
+
+
+--
+-- Name: shifts shifts_org_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.shifts
+    ADD CONSTRAINT shifts_org_id_fkey FOREIGN KEY (org_id) REFERENCES scheduler_dev.organizations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: skills skills_department_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.skills
+    ADD CONSTRAINT skills_department_id_fkey FOREIGN KEY (department_id) REFERENCES scheduler_dev.departments(id) ON DELETE CASCADE;
+
+
+--
+-- Name: staff staff_org_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.staff
+    ADD CONSTRAINT staff_org_id_fkey FOREIGN KEY (org_id) REFERENCES scheduler_dev.organizations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: staff_skills staff_skills_employee_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.staff_skills
+    ADD CONSTRAINT staff_skills_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES scheduler_dev.staff(employee_id) ON DELETE CASCADE;
+
+
+--
+-- Name: staff_skills staff_skills_skill_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.staff_skills
+    ADD CONSTRAINT staff_skills_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES scheduler_dev.skills(id) ON DELETE CASCADE;
+
+
+--
+-- Name: work_pipelines work_pipelines_department_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.work_pipelines
+    ADD CONSTRAINT work_pipelines_department_id_fkey FOREIGN KEY (department_id) REFERENCES scheduler_dev.departments(id);
+
+
+--
+-- Name: work_pipelines work_pipelines_org_id_fkey; Type: FK CONSTRAINT; Schema: scheduler_dev; Owner: -
+--
+
+ALTER TABLE ONLY scheduler_dev.work_pipelines
+    ADD CONSTRAINT work_pipelines_org_id_fkey FOREIGN KEY (org_id) REFERENCES scheduler_dev.organizations(id) ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict wbg3Vjewnm9E8IskFTFpP2yUaAFJvZCskPhTGh8WzxDjwWNQAKaXEahB1ajG0R9
+

@@ -23,10 +23,7 @@ export default function DepartmentAndSkills() {
 
   // Form states
   const [deptForm, setDeptForm] = useState({
-    name: '',
-    description: '',
-    min_staff_per_shift: '',
-    max_staff_per_shift: ''
+    name: ''
   })
 
   const [skillForm, setSkillForm] = useState({
@@ -45,14 +42,44 @@ export default function DepartmentAndSkills() {
     setError(null)
     try {
       const [deptRes, skillRes] = await Promise.all([
-        apiFetch(`/api/v1/${ORG_SLUG}/departments`, {}, token),
-        apiFetch(`/api/v1/${ORG_SLUG}/skills`, {}, token)
+        apiFetch(`/api/v1/${ORG_SLUG}/departments`, {}, token).catch(err => {
+          console.error('Departments API error:', err)
+          return { departments: [] } // Return empty array on error
+        }),
+        apiFetch(`/api/v1/${ORG_SLUG}/skills`, {}, token).catch(err => {
+          console.error('Skills API error:', err)
+          return { skills: [] } // Return empty array on error
+        })
       ])
 
-      setDepartments(deptRes?.departments || deptRes || [])
-      setSkills(skillRes?.skills || skillRes || [])
+      // Handle various response formats for departments
+      let departmentsData = []
+      if (Array.isArray(deptRes)) {
+        departmentsData = deptRes
+      } else if (deptRes?.departments && Array.isArray(deptRes.departments)) {
+        departmentsData = deptRes.departments
+      } else if (deptRes?.data && Array.isArray(deptRes.data)) {
+        departmentsData = deptRes.data
+      }
+
+      // Handle various response formats for skills
+      let skillsData = []
+      if (Array.isArray(skillRes)) {
+        skillsData = skillRes
+      } else if (skillRes?.skills && Array.isArray(skillRes.skills)) {
+        skillsData = skillRes.skills
+      } else if (skillRes?.data && Array.isArray(skillRes.data)) {
+        skillsData = skillRes.data
+      }
+
+      setDepartments(departmentsData)
+      setSkills(skillsData)
     } catch (err) {
+      console.error('Error loading data:', err)
       setError(String(err))
+      // Set empty arrays even on error to prevent undefined issues
+      setDepartments([])
+      setSkills([])
     } finally {
       setLoading(false)
     }
@@ -66,10 +93,7 @@ export default function DepartmentAndSkills() {
 
     try {
       const payload = {
-        name: deptForm.name,
-        description: deptForm.description,
-        min_staff_per_shift: parseInt(deptForm.min_staff_per_shift) || 1,
-        max_staff_per_shift: parseInt(deptForm.max_staff_per_shift) || 5
+        name: deptForm.name
       }
 
       await apiFetch(`/api/v1/${ORG_SLUG}/departments`, {
@@ -82,10 +106,7 @@ export default function DepartmentAndSkills() {
 
       setShowDeptModal(false)
       setDeptForm({
-        name: '',
-        description: '',
-        min_staff_per_shift: '',
-        max_staff_per_shift: ''
+        name: ''
       })
       loadData() // Reload data
     } catch (err) {
@@ -144,21 +165,19 @@ export default function DepartmentAndSkills() {
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('departments')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'departments'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'departments'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
           >
             Departments
           </button>
           <button
             onClick={() => setActiveTab('skills')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'skills'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'skills'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
           >
             Skills
           </button>
@@ -188,21 +207,12 @@ export default function DepartmentAndSkills() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Name
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Min Staff per Shift
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Max Staff per Shift
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {departments.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan="1" className="px-6 py-4 text-center text-gray-500">
                         No departments found
                       </td>
                     </tr>
@@ -211,15 +221,6 @@ export default function DepartmentAndSkills() {
                       <tr key={dept.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {dept.name}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {dept.description || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {dept.min_staff_per_shift || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {dept.max_staff_per_shift || '-'}
                         </td>
                       </tr>
                     ))
@@ -311,49 +312,10 @@ export default function DepartmentAndSkills() {
                   type="text"
                   required
                   value={deptForm.name}
-                  onChange={(e) => setDeptForm({...deptForm, name: e.target.value})}
+                  onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g., Laboratory, Radiology, Emergency"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={deptForm.description}
-                  onChange={(e) => setDeptForm({...deptForm, description: e.target.value})}
-                  rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Min Staff per Shift
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={deptForm.min_staff_per_shift}
-                    onChange={(e) => setDeptForm({...deptForm, min_staff_per_shift: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Max Staff per Shift
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={deptForm.max_staff_per_shift}
-                    onChange={(e) => setDeptForm({...deptForm, max_staff_per_shift: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -393,7 +355,7 @@ export default function DepartmentAndSkills() {
                 </label>
                 <select
                   value={skillForm.department_id}
-                  onChange={(e) => setSkillForm({...skillForm, department_id: e.target.value})}
+                  onChange={(e) => setSkillForm({ ...skillForm, department_id: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Select a department (optional)</option>
@@ -411,7 +373,7 @@ export default function DepartmentAndSkills() {
                   type="text"
                   required
                   value={skillForm.skill_name}
-                  onChange={(e) => setSkillForm({...skillForm, skill_name: e.target.value})}
+                  onChange={(e) => setSkillForm({ ...skillForm, skill_name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
@@ -423,7 +385,7 @@ export default function DepartmentAndSkills() {
                 <input
                   type="text"
                   value={skillForm.required_certification}
-                  onChange={(e) => setSkillForm({...skillForm, required_certification: e.target.value})}
+                  onChange={(e) => setSkillForm({ ...skillForm, required_certification: e.target.value })}
                   placeholder="e.g., Phlebotomy Certificate, BLS Certification"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
