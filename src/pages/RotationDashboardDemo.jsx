@@ -831,7 +831,6 @@ export default function RotationDashboard(){
 
         {/* Shift Details Section */}
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-gray-800">Shift Details</h1>
 
           {/* Calendar and Recent shifts side-by-side */}
           <div className="grid md:grid-cols-3 gap-6">
