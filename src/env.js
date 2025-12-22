@@ -7,5 +7,5 @@ export function getEnvVar(name, fallback) {
     return process.env[name]
   return fallback
 }
-export const OPENAPI_BASE = getEnvVar('VITE_REACT_APP_API_BASE', 'https://lab-scheduler.up.railway.app')
+export const OPENAPI_BASE = getEnvVar('VITE_REACT_APP_API_BASE', 'https://lab-scheduler-backend-7xe8.onrender.com')
 export const ORG_SLUG = getEnvVar('VITE_REACT_APP_ORG_SLUG', 'bio-dev')
