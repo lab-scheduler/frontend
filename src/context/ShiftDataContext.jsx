@@ -18,11 +18,6 @@ export function ShiftDataProvider({ children }) {
   const [shiftsCache, setShiftsCache] = useState(new Map())
   const [loading, setLoading] = useState(false)
 
-  // Return loading state if token is not available
-  if (token === null || token === undefined) {
-    return <>{children}</> // Just render children without context functionality
-  }
-
   // Fetch shifts with caching
   const fetchShifts = useCallback(async (startDate, endDate, forceRefresh = false) => {
     if (!token) return []
