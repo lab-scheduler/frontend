@@ -1,12 +1,24 @@
-import React, {useState} from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export default function Topbar(){
-  const { user, logout } = useAuth()
+export default function Topbar() {
+  const { user, token, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
+  const prevTokenRef = useRef(token)
+
+  // Navigate to login only when logging out (token goes from truthy to null)
+  useEffect(() => {
+    const prevToken = prevTokenRef.current
+    prevTokenRef.current = token
+
+    // Only navigate if we HAD a token and now we don't (logout scenario)
+    if (prevToken && !token && location.pathname !== '/login') {
+      navigate('/login', { replace: true })
+    }
+  }, [token, navigate, location.pathname])
 
   return (
     <div className="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg">
@@ -24,7 +36,7 @@ export default function Topbar(){
 
           {/* Mobile button */}
           <button
-            onClick={()=>setOpen(!open)}
+            onClick={() => setOpen(!open)}
             className="md:hidden p-2 rounded-lg hover:bg-white/20 transition-colors"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,11 +58,10 @@ export default function Topbar(){
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`group relative px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center space-x-2 ${
-                    isActive
-                      ? 'bg-white/20 text-white shadow-md'
-                      : 'text-white/90 hover:text-white hover:bg-white/10'
-                  }`}
+                  className={`group relative px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center space-x-2 ${isActive
+                    ? 'bg-white/20 text-white shadow-md'
+                    : 'text-white/90 hover:text-white hover:bg-white/10'
+                    }`}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
@@ -75,7 +86,7 @@ export default function Topbar(){
                   </svg>
                 </div>
                 <button
-                  onClick={()=>{logout();navigate('/login')}}
+                  onClick={logout}
                   className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white font-medium rounded-lg transition-colors duration-200 flex items-center space-x-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,11 +125,10 @@ export default function Topbar(){
                   key={item.to}
                   to={item.to}
                   onClick={() => setOpen(false)}
-                  className={`block px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
-                    isActive
-                      ? 'bg-white/20 text-white font-medium'
-                      : 'text-white/90 hover:text-white hover:bg-white/10'
-                  }`}
+                  className={`block px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${isActive
+                    ? 'bg-white/20 text-white font-medium'
+                    : 'text-white/90 hover:text-white hover:bg-white/10'
+                    }`}
                 >
                   <span>{item.label}</span>
                   {isActive && (
@@ -136,7 +146,7 @@ export default function Topbar(){
                   <p className="text-sm font-medium text-white mb-1">{user.username || user.employee_id}</p>
                   <p className="text-xs text-white/70 mb-3">{user.role}</p>
                   <button
-                    onClick={()=>{logout();navigate('/login');setOpen(false)}}
+                    onClick={() => { logout(); setOpen(false) }}
                     className="w-full px-4 py-2 bg-white/20 hover:bg-white/30 text-white font-medium rounded-lg transition-colors"
                   >
                     Logout
