@@ -24,10 +24,19 @@ export function ShiftDataProvider({ children }) {
 
     const cacheKey = `${startDate}-${endDate}`
 
-    // Check cache first (unless force refresh)
-    if (!forceRefresh && shiftsCache.has(cacheKey)) {
-      return shiftsCache.get(cacheKey)
+    // Check cache using functional update to avoid dependency on shiftsCache
+    let cachedData = null
+    if (!forceRefresh) {
+      setShiftsCache(prev => {
+        if (prev.has(cacheKey)) {
+          cachedData = prev.get(cacheKey)
+        }
+        return prev // Don't modify cache, just read
+      })
     }
+
+    // Return cached data if available
+    if (cachedData) return cachedData
 
     try {
       setLoading(true)
@@ -43,7 +52,7 @@ export function ShiftDataProvider({ children }) {
     } finally {
       setLoading(false)
     }
-  }, [token, shiftsCache])
+  }, [token]) // Only token dependency - prevents infinite loop
 
   // Clear cache
   const clearCache = useCallback(() => {
@@ -53,8 +62,13 @@ export function ShiftDataProvider({ children }) {
   // Check if data exists in cache
   const hasCachedData = useCallback((startDate, endDate) => {
     const cacheKey = `${startDate}-${endDate}`
-    return shiftsCache.has(cacheKey)
-  }, [shiftsCache])
+    let hasData = false
+    setShiftsCache(prev => {
+      hasData = prev.has(cacheKey)
+      return prev // Don't modify cache, just read
+    })
+    return hasData
+  }, []) // No dependencies - uses functional setState
 
   const value = {
     fetchShifts,

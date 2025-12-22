@@ -210,14 +210,7 @@ export default function RotationDashboard() {
         if (calendarAnalysisVal && calendarShiftsVal) {
           const calendarAnalysisShifts = calendarAnalysisVal?.data?.report?.shifts || calendarAnalysisVal?.shifts || []
 
-          console.log('📅 Calendar Analysis Debug:', {
-            month: `${monthStart} to ${monthEnd}`,
-            hasAnalysis: !!calendarAnalysisVal,
-            analysisShiftsCount: calendarAnalysisShifts.length,
-            calendarShiftsCount: Array.isArray(calendarShiftsVal) ? calendarShiftsVal.length : 0,
-            sampleAnalysisShift: calendarAnalysisShifts[0],
-            sampleCalendarShift: Array.isArray(calendarShiftsVal) ? calendarShiftsVal[0] : null
-          })
+
 
           if (calendarAnalysisShifts.length > 0 && Array.isArray(calendarShiftsVal)) {
             calendarShiftsVal = calendarShiftsVal.map(shift => {
@@ -240,13 +233,7 @@ export default function RotationDashboard() {
 
               return shift
             })
-            const shiftsWithAssignments = calendarShiftsVal.filter(s => s.assignments)
-            console.log('✅ Merged calendar assignments:', shiftsWithAssignments.length, 'of', calendarShiftsVal.length, 'shifts have assignments')
-            if (shiftsWithAssignments.length > 0) {
-              console.log('Sample assigned shift:', shiftsWithAssignments[0])
-            } else {
-              console.warn('⚠️ No shifts matched! Check if shift IDs/types match between shifts and analysis')
-            }
+
           } else {
             console.warn('⚠️ Cannot merge:', {
               analysisShiftsEmpty: calendarAnalysisShifts.length === 0,
@@ -263,7 +250,7 @@ export default function RotationDashboard() {
         setStaff(staffVal)
         setDashboardShifts(dashboardShiftsVal)
         setCalendarShifts(calendarShiftsVal)
-        console.log('Calendar shifts updated:', calendarShiftsVal?.length || 0, 'shifts')
+
         setAnalysis(analysisVal)
         setSkills(skillsVal)
         setLeaves(leavesVal)
@@ -288,7 +275,8 @@ export default function RotationDashboard() {
     }
     loadAllData()
     return () => mounted = false
-  }, [token, todayStart, todayEnd, monthStart, monthEnd, fetchShifts]) // Reload when any date range changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, todayStart, todayEnd, monthStart, monthEnd]) // Removed fetchShifts to prevent infinite loop
 
   // Today's shifts - filter from dashboardShifts that already contains the data
   const todayShifts = useMemo(() => {
@@ -392,7 +380,7 @@ export default function RotationDashboard() {
 
     // Fetch detailed shift data AND analysis data with assignments for this specific date
     try {
-      console.log(`Fetching detailed data for ${dateKey}`)
+
 
       // Fetch both shifts and analysis in parallel
       const [detailedShifts, analysisData] = await Promise.all([
@@ -400,8 +388,7 @@ export default function RotationDashboard() {
         apiFetch(`/api/v1/${ORG_SLUG}/analysis/range?start=${dateKey}&end=${dateKey}&detailed=true`, {}, token)
       ])
 
-      console.log('Detailed shifts response:', detailedShifts)
-      console.log('Analysis data response:', analysisData)
+
 
       // Extract shifts from analysis if available
       const analysisShifts = analysisData?.data?.report?.shifts || analysisData?.shifts || []
@@ -432,7 +419,7 @@ export default function RotationDashboard() {
         })
       }
 
-      console.log('Final shifts to show:', shiftsToShow)
+
       setSelectedDay({ date: dateKey, shifts: shiftsToShow })
     } catch (err) {
       console.error('Error fetching detailed shifts:', err)
@@ -495,35 +482,14 @@ export default function RotationDashboard() {
 
         // Debug logging
         if (import.meta.env.DEV) {
-          console.log(`Looking for staff ${id} on ${date}:`)
-          console.log(`Found ${dailyShifts.length} matching shifts`)
-          console.log('All shifts for this date:', allShifts.filter(s => s.date === date || (s.shift_date && s.shift_date.startsWith(date))))
-          console.log('Daily shifts found:', dailyShifts)
-          dailyShifts.forEach((s, i) => {
-            console.log(`Shift ${i}:`, {
-              shift_id: s.shift_id,
-              date: s.date,
-              type: s.type,
-              department: s.department?.name,
-              assignments: s.assignments?.filter(a => a.employee_id === id)
-            })
-          })
-        }
-
-        if (dailyShifts.length > 0) {
-          // Calculate daily totals from shifts
-          const dailyHours = dailyShifts.reduce((sum, s) => {
-            const assignment = s.assignments.find(a => a.employee_id === id)
-            const hours = assignment?.assigned_hours || s.requirements?.hours || 8
-            if (import.meta.env.DEV) {
-              console.log(`Adding ${hours} hours for shift ${s.shift_id}`)
+          // Calculate daily hours from shifts
+          let dailyHours = 0
+          dailyShifts.forEach(s => {
+            const hours = toNumber(s.hours || s.duration || 8)
+            if (hours) {
+              dailyHours += hours
             }
-            return sum + hours
-          }, 0)
-
-          if (import.meta.env.DEV) {
-            console.log(`Total daily hours calculated: ${dailyHours}`)
-          }
+          })
 
           // Get unique skills used today
           const dailySkills = new Set()
@@ -579,7 +545,7 @@ export default function RotationDashboard() {
       if (!normalized.performance && found?.performance_summary) normalized.performance = found.performance_summary
 
       if (import.meta.env.DEV) {
-        console.log('Setting staff detail:', normalized)
+
       }
       setStaffDetail(normalized)
     } catch (err) {
@@ -616,7 +582,7 @@ export default function RotationDashboard() {
         end_date: end_date
       }
 
-      console.log('Scheduler payload:', payload)
+
 
       const response = await apiFetch(`/api/v1/${ORG_SLUG}/schedule/run`, {
         method: 'POST',
@@ -626,7 +592,7 @@ export default function RotationDashboard() {
         body: JSON.stringify(payload)
       }, token)
 
-      console.log('Scheduler response:', response)
+
       setSchedulerResult(response)
 
       // Refresh data after successful run
@@ -645,7 +611,7 @@ export default function RotationDashboard() {
         setTimeout(async () => {
           try {
             // Fetch shifts for the EXACT date range that was scheduled
-            console.log(`Fetching shifts for scheduled range: ${start_date} to ${end_date}`)
+
             await fetchShifts(start_date, end_date, true) // Force refresh for scheduled range
 
             // Also refresh current calendar view if needed
@@ -656,7 +622,7 @@ export default function RotationDashboard() {
             const dashboardRefresh = await fetchShifts(todayStart, todayEnd, true)
             setDashboardShifts(dashboardRefresh || [])
 
-            console.log('Calendar and dashboard updated with new shifts')
+
 
             // Close the modal after data is refreshed
             setTimeout(() => {
@@ -1176,12 +1142,6 @@ export default function RotationDashboard() {
                             // Try multiple possible field names for assignments
                             const assignments = s.assignments || s.assigned_staff || s.staff_assignments || s.employees || []
                             const assignmentArray = Array.isArray(assignments) ? assignments : []
-
-                            // Debug: log the shift structure
-                            if (assignmentArray.length === 0 && import.meta.env.DEV) {
-                              console.log('Shift data structure:', s)
-                              console.log('Available keys:', Object.keys(s))
-                            }
 
                             if (assignmentArray.length > 0) {
                               return assignmentArray.map((a, i2) => (
