@@ -2,7 +2,7 @@
     "name": "lab-scheduler-frontend",
     "version": "1.0.0",
     "private": true,
-    "proxy": "https://lab-scheduler-backend-7xe8.onrender.com",
+    "proxy": "https://lab-scheduler.up.railway.app",
     "type": "module",
     "scripts": {
         "dev": "vite",
