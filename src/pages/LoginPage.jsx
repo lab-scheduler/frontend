@@ -1,10 +1,22 @@
 import React,{useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {useAuth} from '../context/AuthContext'
+import {useOrganization} from '../context/OrganizationContext'
 import {apiFetch} from '../api/api'
 import Card from '../components/Card'
+
+// Helper function to parse JWT token
+function parseJwt(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1]))
+  } catch {
+    return {}
+  }
+}
+
 export default function LoginPage(){
   const {login} = useAuth()
+  const {currentOrg} = useOrganization()
   const [identifier,setIdentifier] = useState('')
   const [password,setPassword] = useState('')
   const [error,setError] = useState('')
@@ -19,8 +31,24 @@ export default function LoginPage(){
       })
       const token = res.access_token || res.token
       if(!token) throw new Error('Invalid credentials')
+      
+      // Parse token to get user role
+      const userData = parseJwt(token)
+      const userRole = userData.role
+      
+      // Set token in auth context
       login(token)
-      navigate('/')
+      
+      // Get organization slug (default to 'bio-dev' if not available)
+      const orgSlug = currentOrg?.slug || 'bio-dev'
+      
+      // Redirect based on user role
+      if (userRole === 'STAFF') {
+        navigate(`/${orgSlug}/staff/portal`)
+      } else {
+        // ADMIN and MANAGER go to dashboard
+        navigate(`/${orgSlug}/dashboard`)
+      }
     }catch(err){
       console.error('Login error:', err)
       setError(err.message || 'Login failed')

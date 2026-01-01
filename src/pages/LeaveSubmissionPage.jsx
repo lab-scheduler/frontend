@@ -31,14 +31,24 @@ export default function LeaveSubmissionPage() {
       setLoading(true)
       const response = await apiFetch(`/api/v1/${ORG_SLUG}/leaves`, {}, token)
       // Handle API response structure
+      let leavesData = []
       if (response && response.data && Array.isArray(response.data)) {
-        setAllLeaves(response.data)
+        leavesData = response.data
       } else if (Array.isArray(response)) {
-        setAllLeaves(response)
+        leavesData = response
       } else {
         console.warn('Unexpected API response format:', response)
-        setAllLeaves([])
+        leavesData = []
       }
+
+      // Sort by submitted_at or id (newest first)
+      leavesData.sort((a, b) => {
+        const dateA = a.submitted_at ? new Date(a.submitted_at) : new Date(0)
+        const dateB = b.submitted_at ? new Date(b.submitted_at) : new Date(0)
+        return dateB - dateA || (b.id || 0) - (a.id || 0)
+      })
+
+      setAllLeaves(leavesData)
     } catch (err) {
       setError(err.message)
       setAllLeaves([])
@@ -53,14 +63,24 @@ export default function LeaveSubmissionPage() {
       setLoading(true)
       const response = await apiFetch(`/api/v1/${ORG_SLUG}/leaves/PENDING`, {}, token)
       // Handle API response structure
+      let leavesData = []
       if (response && response.data && Array.isArray(response.data)) {
-        setLeaves(response.data)
+        leavesData = response.data
       } else if (Array.isArray(response)) {
-        setLeaves(response)
+        leavesData = response
       } else {
         console.warn('Unexpected API response format:', response)
-        setLeaves([])
+        leavesData = []
       }
+
+      // Sort by submitted_at or id (newest first)
+      leavesData.sort((a, b) => {
+        const dateA = a.submitted_at ? new Date(a.submitted_at) : new Date(0)
+        const dateB = b.submitted_at ? new Date(b.submitted_at) : new Date(0)
+        return dateB - dateA || (b.id || 0) - (a.id || 0)
+      })
+
+      setLeaves(leavesData)
     } catch (err) {
       setError(err.message)
       setLeaves([])
@@ -374,12 +394,11 @@ export default function LeaveSubmissionPage() {
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Status</p>
-                      <p className={`font-medium ${
-                        leave.status === 'APPROVED' ? 'text-green-600' :
+                      <p className={`font-medium ${leave.status === 'APPROVED' ? 'text-green-600' :
                         leave.status === 'REJECTED' ? 'text-red-600' :
-                        leave.status === 'PENDING' ? 'text-yellow-600' :
-                        'text-gray-600'
-                      }`}>
+                          leave.status === 'PENDING' ? 'text-yellow-600' :
+                            'text-gray-600'
+                        }`}>
                         {leave.status || 'PENDING'}
                       </p>
                     </div>
