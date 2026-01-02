@@ -4,10 +4,13 @@ import { useOrganization } from '../context/OrganizationContext'
 
 export default function OrgSlugValidator() {
     const { orgSlug } = useParams()
-    const { availableOrgs, setCurrentOrg, currentOrg } = useOrganization()
+    const { availableOrgs, setCurrentOrg, currentOrg, loading } = useOrganization()
     const navigate = useNavigate()
 
     useEffect(() => {
+        // Wait until organizations are loaded before validating
+        if (loading) return
+
         // Find the organization by slug
         const org = availableOrgs.find(o => o.slug === orgSlug)
 
@@ -19,7 +22,7 @@ export default function OrgSlugValidator() {
             // Valid org-slug, set as current organization
             setCurrentOrg(org)
         }
-    }, [orgSlug, availableOrgs, currentOrg, setCurrentOrg, navigate])
+    }, [orgSlug, availableOrgs, currentOrg, setCurrentOrg, navigate, loading])
 
     // Render children routes
     return <Outlet />

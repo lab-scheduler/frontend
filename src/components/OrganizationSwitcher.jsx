@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useOrganization } from '../context/OrganizationContext'
 import { useAuth } from '../context/AuthContext'
 
@@ -7,6 +8,8 @@ export default function OrganizationSwitcher() {
     const { currentOrg, availableOrgs, setCurrentOrg, loading } = useOrganization()
     const [isOpen, setIsOpen] = useState(false)
     const dropdownRef = useRef(null)
+    const navigate = useNavigate()
+    const location = useLocation()
 
     // Only show for ADMIN and MANAGER roles
     if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
@@ -30,8 +33,9 @@ export default function OrganizationSwitcher() {
     const handleOrgSwitch = (org) => {
         setCurrentOrg(org)
         setIsOpen(false)
-        // Reload the page to refresh all data with new organization
-        window.location.reload()
+        // Navigate to the same page path but with new org slug
+        const currentPath = location.pathname.split('/').slice(2).join('/')
+        navigate(`/${org.slug}/${currentPath || 'dashboard'}`, { replace: true })
     }
 
     if (loading || !currentOrg) {
