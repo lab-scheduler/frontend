@@ -31,7 +31,7 @@ export function OrganizationProvider({ children }) {
     async function fetchOrganizations() {
       if (!token) {
         setAvailableOrgs([])
-        setLoading(false)
+        setLoading(true)
         return
       }
 
