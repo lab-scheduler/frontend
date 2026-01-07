@@ -1,0 +1,9 @@
+Route Path,Page Component,Status,Authentication Required,Allowed Roles,Description
+/,RotationDashboardDemo,Active,Yes,All authenticated users,Main rotation dashboard (home page)
+/login,LoginPage,Active,No,Public,User login page
+/leaves,LeaveSubmissionPage,Active,Yes,All authenticated users,Leave submission and management
+/staff,StaffManagementPage,Active,Yes,All authenticated users,Staff management interface
+/departments-skills,DepartmentAndSkills,Active,Yes,All authenticated users,Department and skills configuration
+/pipeline-generator,PipelineGenerator,Active,Yes,All authenticated users,Pipeline generation with shift templates
+/entry,DataEntryPage,Commented Out,Yes,"MANAGER, ADMIN",Data entry page for staff/skills/shifts
+*,Navigate to /,Active,No,Public,Catch-all redirect to home page

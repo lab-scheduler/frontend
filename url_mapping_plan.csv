@@ -1,0 +1,15 @@
+Current Path,Component,Page Name,Proposed New Path,Category,Sub-Category,Description,Requires Auth,Role Restrictions
+/login,LoginPage,Login,/login,Authentication,N/A,User authentication page,No,None
+/,RotationDashboard,Dashboard,/:orgSlug/dashboard,Core,Dashboard,Main rotation dashboard with calendar and analytics,Yes,None
+/leaves,LeaveSubmissionPage,Leave Management,/:orgSlug/leaves,Management,Leaves,Submit and manage leave requests,Yes,None
+/staff,StaffManagementPage,Staff Management,/:orgSlug/staff/management,Management,Staff,Manage staff members (CRUD operations),Yes,None
+/departments-skills,DepartmentAndSkills,Departments & Skills,/:orgSlug/settings/departments-skills,Settings,Organization,Manage departments and skills hierarchy,Yes,None
+/pipeline-generator,PipelineGenerator,Pipeline Generator,/:orgSlug/scheduling/pipeline-generator,Scheduling,Pipeline,Generate shift schedules using AI,Yes,None
+/staff-preview,StaffPreviewPage,Staff Portal,/:orgSlug/staff/portal,Staff,Portal,Staff self-service portal with calendar and profile,Yes,None
+
+Notes:
+"- orgSlug is a dynamic parameter from OrganizationContext (e.g., 'bio-dev')"
+"- Pattern: /:orgSlug/{feature-category}/{specific-feature}"
+"- Categories: Core (dashboard), Management (staff/leaves), Settings (config), Scheduling (pipeline), Staff (portal)"
+"- All authenticated routes require valid JWT token"
+"- Login page remains at root level without org-slug prefix"

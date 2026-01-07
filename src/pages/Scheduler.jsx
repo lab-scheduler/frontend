@@ -10,12 +10,19 @@ import { ORG_SLUG } from '../env'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 
-export default function PipelineGenerator() {
+export default function Scheduler() {
   const { token } = useAuth()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
+
+  // Scheduler modal states
+  const [showSchedulerModal, setShowSchedulerModal] = useState(false)
+  const [schedulerLoading, setSchedulerLoading] = useState(false)
+  const [schedulerResult, setSchedulerResult] = useState(null)
+  const [useCpsat, setUseCpsat] = useState(true)
+  const [createdShiftsSummary, setCreatedShiftsSummary] = useState(null)
 
   // Data states
   const [departments, setDepartments] = useState([])
@@ -314,12 +321,19 @@ export default function PipelineGenerator() {
         body: JSON.stringify(payload)
       }, token)
 
-      setSuccess(`Successfully generated ${response.summary?.total || 0} shifts (${response.summary?.department_shifts_created || 0} department shifts, ${response.summary?.pipeline_shifts_created || 0} pipeline shifts)`)
+      const summary = {
+        total: response.summary?.total || 0,
+        department_shifts: response.summary?.department_shifts_created || 0,
+        pipeline_shifts: response.summary?.pipeline_shifts_created || 0,
+        start_date: formData.start_date,
+        end_date: formData.end_date
+      }
 
-      // Optionally redirect to dashboard after success
-      setTimeout(() => {
-        navigate('/')
-      }, 2000)
+      setCreatedShiftsSummary(summary)
+      setSuccess(`Successfully generated ${summary.total} shifts (${summary.department_shifts} department shifts, ${summary.pipeline_shifts} pipeline shifts)`)
+
+      // Show scheduler modal instead of navigating away
+      setShowSchedulerModal(true)
     } catch (err) {
       setError(String(err))
     } finally {
@@ -327,14 +341,59 @@ export default function PipelineGenerator() {
     }
   }
 
+  // Run scheduler function
+  async function runScheduler() {
+    if (!createdShiftsSummary) return
+
+    setSchedulerLoading(true)
+    setSchedulerResult(null)
+
+    try {
+      const { start_date, end_date } = createdShiftsSummary
+
+      const payload = {
+        start_date,
+        end_date,
+        use_cpsat: useCpsat
+      }
+
+      const response = await apiFetch(`/api/v1/${ORG_SLUG}/schedule/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }, token)
+
+      setSchedulerResult({
+        ...response,
+        success: true
+      })
+
+      // Navigate to dashboard after a short delay
+      setTimeout(() => {
+        navigate(`/${ORG_SLUG}/dashboard`)
+      }, 2000)
+    } catch (error) {
+      console.error('Scheduler error:', error)
+      setSchedulerResult({
+        success: false,
+        error: String(error)
+      })
+    } finally {
+      setSchedulerLoading(false)
+    }
+  }
+
+
   const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const shiftTypes = ['DAY', 'EVENING', 'NIGHT']
 
   return (
     <div className="space-y-6 p-4">
       <div>
-        <h1 className="text-3xl font-bold">Pipeline Generator</h1>
-        <p className="text-gray-600 mt-1">Generate recurring shifts and pipelines for your departments</p>
+        <h1 className="text-3xl font-bold">Scheduler</h1>
+        <p className="text-gray-600 mt-1">Create shift schedules and run the automated scheduler to assign staff</p>
       </div>
 
       {error && <div className="text-red-600 bg-red-50 p-4 rounded">{error}</div>}
@@ -927,6 +986,168 @@ export default function PipelineGenerator() {
         onApply={handleApplyTemplate}
         template={selectedTemplate}
       />
+
+      {/* Scheduler Modal */}
+      {showSchedulerModal && createdShiftsSummary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black opacity-30" onClick={() => setShowSchedulerModal(false)} />
+          <div className="relative bg-white w-11/12 md:w-1/2 lg:w-1/3 rounded-lg shadow-xl p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-semibold">Shifts Created Successfully!</h3>
+              <button
+                onClick={() => setShowSchedulerModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {!schedulerResult ? (
+              <div className="space-y-4">
+                {/* Success Summary */}
+                <div className="bg-green-50 border border-green-200 rounded-md p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="font-semibold text-green-700">
+                      {createdShiftsSummary.total} shifts created
+                    </span>
+                  </div>
+                  <div className="text-sm text-green-600 space-y-1">
+                    <div>• Department shifts: {createdShiftsSummary.department_shifts}</div>
+                    <div>• Pipeline shifts: {createdShiftsSummary.pipeline_shifts}</div>
+                    <div>• Date range: {createdShiftsSummary.start_date} to {createdShiftsSummary.end_date}</div>
+                  </div>
+                </div>
+
+                {/* Scheduler Options */}
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-700">
+                    Would you like to run the automated scheduler to assign staff to these shifts?
+                  </p>
+
+                  {/* use_cpsat Toggle */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div className="flex-1">
+                        <div className="font-medium text-sm text-gray-700">Use CP-SAT Solver</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {useCpsat
+                            ? 'More optimal assignments (slower)'
+                            : 'Faster greedy algorithm (less optimal)'}
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={useCpsat}
+                          onChange={(e) => setUseCpsat(e.target.checked)}
+                          className="sr-only"
+                        />
+                        <div
+                          onClick={() => setUseCpsat(!useCpsat)}
+                          className={`w-11 h-6 rounded-full transition-colors ${useCpsat ? 'bg-indigo-600' : 'bg-gray-300'
+                            }`}
+                        >
+                          <div
+                            className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform ${useCpsat ? 'translate-x-6' : 'translate-x-1'
+                              } mt-1`}
+                          />
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setShowSchedulerModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Skip for Now
+                  </button>
+                  <button
+                    onClick={runScheduler}
+                    disabled={schedulerLoading}
+                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {schedulerLoading ? 'Running...' : 'Run Scheduler'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {schedulerResult.success !== false ? (
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="font-semibold text-green-600">Scheduler completed successfully!</span>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 p-4 rounded text-sm space-y-3">
+                      <p className="text-green-700">{schedulerResult.message || 'Staff assignments have been created.'}</p>
+                      {schedulerResult.summary && (
+                        <div className="bg-white rounded p-3 space-y-1 text-green-800">
+                          {schedulerResult.summary.total_assignments !== undefined && (
+                            <div><strong>Total Assignments:</strong> {schedulerResult.summary.total_assignments}</div>
+                          )}
+                          {schedulerResult.summary.shifts_covered !== undefined && (
+                            <div><strong>Shifts Covered:</strong> {schedulerResult.summary.shifts_covered}</div>
+                          )}
+                          {schedulerResult.summary.coverage_rate && (
+                            <div><strong>Coverage Rate:</strong> {schedulerResult.summary.coverage_rate}%</div>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex items-center text-green-600 pt-2">
+                        <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Redirecting to dashboard...
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="font-semibold text-red-600">Scheduler failed</span>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded text-sm">
+                      <p className="text-red-700">{schedulerResult.error || 'Unknown error occurred'}</p>
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={() => setSchedulerResult(null)}
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                      >
+                        Try Again
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowSchedulerModal(false)
+                          setSchedulerResult(null)
+                        }}
+                        className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
