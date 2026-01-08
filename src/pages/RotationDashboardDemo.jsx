@@ -186,8 +186,20 @@ export default function RotationDashboard() {
         const [rStaff, rDashboardShifts, rCalendarShifts, rAnalysis, rCalendarAnalysis, rSkills, rLeaves, rDeps] = res
 
         const staffVal = rStaff.status === 'fulfilled' ? rStaff.value : []
-        const dashboardShiftsVal = rDashboardShifts.status === 'fulfilled' ? rDashboardShifts.value : []
+
+        // Normalize shifts responses - ensure they are always arrays
+        let dashboardShiftsVal = rDashboardShifts.status === 'fulfilled' ? rDashboardShifts.value : []
+        if (!Array.isArray(dashboardShiftsVal)) {
+          console.warn('Dashboard shifts is not an array:', dashboardShiftsVal)
+          dashboardShiftsVal = dashboardShiftsVal?.shifts || dashboardShiftsVal?.data || []
+        }
+
         let calendarShiftsVal = rCalendarShifts.status === 'fulfilled' ? rCalendarShifts.value : []
+        if (!Array.isArray(calendarShiftsVal)) {
+          console.warn('Calendar shifts is not an array:', calendarShiftsVal)
+          calendarShiftsVal = calendarShiftsVal?.shifts || calendarShiftsVal?.data || []
+        }
+
         const analysisVal = rAnalysis.status === 'fulfilled' ? rAnalysis.value : null
         const calendarAnalysisVal = rCalendarAnalysis.status === 'fulfilled' ? rCalendarAnalysis.value : null
         const skillsVal = rSkills.status === 'fulfilled' ? rSkills.value : []
@@ -752,12 +764,6 @@ export default function RotationDashboard() {
               className="px-5 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 font-medium shadow-sm"
             >
               Refresh
-            </button>
-            <button
-              onClick={() => setSchedulerModalOpen(true)}
-              className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
-            >
-              Run Scheduler
             </button>
           </div>
         </div>
