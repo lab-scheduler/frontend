@@ -1,26 +1,29 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useAnalyticsCache } from '../context/AnalyticsCacheContext'
 import { apiFetch } from '../api/api'
 import { ORG_SLUG } from '../env'
 import Card from '../components/Card'
 
 export default function DashboardV2() {
     const { token } = useAuth()
-    const [dateRange, setDateRange] = useState({
+    const { cache, getCachedData, setCachedData, setDateRange, clearCache, isCacheValid } = useAnalyticsCache()
+
+    const [dateRange, setDateRangeState] = useState({
         start_date: new Date().toISOString().slice(0, 10),
         end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     })
 
-    // Analytics data states
-    const [safetyData, setSafetyData] = useState(null)
-    const [alertsData, setAlertsData] = useState(null)
-    const [burnoutData, setBurnoutData] = useState(null)
-    const [shiftRisksData, setShiftRisksData] = useState(null)
-    const [dependencyData, setDependencyData] = useState(null)
-    const [fairnessData, setFairnessData] = useState(null)
-    const [recommendationsData, setRecommendationsData] = useState(null)
+    // Analytics data states - initialize from cache if available
+    const [safetyData, setSafetyData] = useState(getCachedData('safety'))
+    const [alertsData, setAlertsData] = useState(getCachedData('alerts'))
+    const [burnoutData, setBurnoutData] = useState(getCachedData('burnout'))
+    const [shiftRisksData, setShiftRisksData] = useState(getCachedData('shiftRisks'))
+    const [dependencyData, setDependencyData] = useState(getCachedData('dependency'))
+    const [fairnessData, setFairnessData] = useState(getCachedData('fairness'))
+    const [recommendationsData, setRecommendationsData] = useState(getCachedData('recommendations'))
 
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
 
     // Fetch all analytics data
@@ -28,6 +31,20 @@ export default function DashboardV2() {
         async function loadAnalytics() {
             if (!token) return
 
+            // Check if we have valid cached data for this date range
+            if (isCacheValid(dateRange)) {
+                console.log('📦 Using cached analytics data')
+                setSafetyData(getCachedData('safety'))
+                setAlertsData(getCachedData('alerts'))
+                setBurnoutData(getCachedData('burnout'))
+                setShiftRisksData(getCachedData('shiftRisks'))
+                setDependencyData(getCachedData('dependency'))
+                setFairnessData(getCachedData('fairness'))
+                setRecommendationsData(getCachedData('recommendations'))
+                return
+            }
+
+            console.log('🔄 Fetching fresh analytics data')
             setLoading(true)
             setError(null)
 
@@ -49,14 +66,38 @@ export default function DashboardV2() {
                 if (allFailed) {
                     setError('Analytics endpoints are not yet implemented on the backend. Please implement the 7 analytics endpoints first.')
                 } else {
-                    // Set data only if successful
-                    if (safety.status === 'fulfilled' && !safety.value?.error) setSafetyData(safety.value)
-                    if (alerts.status === 'fulfilled' && !alerts.value?.error) setAlertsData(alerts.value)
-                    if (burnout.status === 'fulfilled' && !burnout.value?.error) setBurnoutData(burnout.value)
-                    if (shiftRisks.status === 'fulfilled' && !shiftRisks.value?.error) setShiftRisksData(shiftRisks.value)
-                    if (dependency.status === 'fulfilled' && !dependency.value?.error) setDependencyData(dependency.value)
-                    if (fairness.status === 'fulfilled' && !fairness.value?.error) setFairnessData(fairness.value)
-                    if (recommendations.status === 'fulfilled' && !recommendations.value?.error) setRecommendationsData(recommendations.value)
+                    // Set data and cache it
+                    if (safety.status === 'fulfilled' && !safety.value?.error) {
+                        setSafetyData(safety.value)
+                        setCachedData('safety', safety.value)
+                    }
+                    if (alerts.status === 'fulfilled' && !alerts.value?.error) {
+                        setAlertsData(alerts.value)
+                        setCachedData('alerts', alerts.value)
+                    }
+                    if (burnout.status === 'fulfilled' && !burnout.value?.error) {
+                        setBurnoutData(burnout.value)
+                        setCachedData('burnout', burnout.value)
+                    }
+                    if (shiftRisks.status === 'fulfilled' && !shiftRisks.value?.error) {
+                        setShiftRisksData(shiftRisks.value)
+                        setCachedData('shiftRisks', shiftRisks.value)
+                    }
+                    if (dependency.status === 'fulfilled' && !dependency.value?.error) {
+                        setDependencyData(dependency.value)
+                        setCachedData('dependency', dependency.value)
+                    }
+                    if (fairness.status === 'fulfilled' && !fairness.value?.error) {
+                        setFairnessData(fairness.value)
+                        setCachedData('fairness', fairness.value)
+                    }
+                    if (recommendations.status === 'fulfilled' && !recommendations.value?.error) {
+                        setRecommendationsData(recommendations.value)
+                        setCachedData('recommendations', recommendations.value)
+                    }
+
+                    // Cache the date range
+                    setDateRange(dateRange)
                 }
 
             } catch (err) {
@@ -68,7 +109,7 @@ export default function DashboardV2() {
         }
 
         loadAnalytics()
-    }, [token, dateRange])
+    }, [token, dateRange, isCacheValid, getCachedData, setCachedData, setDateRange])
 
     if (loading) {
         return (
@@ -88,9 +129,23 @@ export default function DashboardV2() {
     return (
         <div className="p-6 bg-gray-50 min-h-screen">
             {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold text-gray-900">Analytics Dashboard</h1>
-                <p className="text-gray-600 mt-1">Comprehensive insights and recommendations</p>
+            <div className="mb-6 flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Analytics Dashboard</h1>
+                    <p className="text-gray-600 mt-1">Comprehensive insights and recommendations</p>
+                </div>
+                <button
+                    onClick={() => {
+                        clearCache()
+                        window.location.reload()
+                    }}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh Data
+                </button>
             </div>
 
             {/* Date Range Selector */}
@@ -101,7 +156,7 @@ export default function DashboardV2() {
                         <input
                             type="date"
                             value={dateRange.start_date}
-                            onChange={(e) => setDateRange({ ...dateRange, start_date: e.target.value })}
+                            onChange={(e) => setDateRangeState({ ...dateRange, start_date: e.target.value })}
                             className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
@@ -110,7 +165,7 @@ export default function DashboardV2() {
                         <input
                             type="date"
                             value={dateRange.end_date}
-                            onChange={(e) => setDateRange({ ...dateRange, end_date: e.target.value })}
+                            onChange={(e) => setDateRangeState({ ...dateRange, end_date: e.target.value })}
                             className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
@@ -361,8 +416,8 @@ function BurnoutPanel({ data }) {
                         key={level}
                         onClick={() => setRiskFilter(level)}
                         className={`px-3 py-1 rounded text-sm font-medium transition-colors ${riskFilter === level
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                     >
                         {level}
@@ -379,14 +434,14 @@ function BurnoutPanel({ data }) {
                     <div className="space-y-3 max-h-96 overflow-y-auto">
                         {filteredStaff.map(staff => (
                             <div key={staff.employee_id} className={`p-3 border rounded-lg ${staff.risk_level === 'HIGH' ? 'bg-red-50 border-red-200' :
-                                    staff.risk_level === 'MEDIUM' ? 'bg-yellow-50 border-yellow-200' :
-                                        'bg-green-50 border-green-200'
+                                staff.risk_level === 'MEDIUM' ? 'bg-yellow-50 border-yellow-200' :
+                                    'bg-green-50 border-green-200'
                                 }`}>
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="font-medium text-gray-900">{staff.full_name}</div>
                                     <div className={`text-lg font-bold ${staff.risk_level === 'HIGH' ? 'text-red-600' :
-                                            staff.risk_level === 'MEDIUM' ? 'text-yellow-600' :
-                                                'text-green-600'
+                                        staff.risk_level === 'MEDIUM' ? 'text-yellow-600' :
+                                            'text-green-600'
                                         }`}>
                                         {staff.risk_score}
                                     </div>
