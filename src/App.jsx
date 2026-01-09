@@ -8,6 +8,7 @@ import LeaveSubmissionPage from './pages/LeaveSubmissionPage'
 import StaffManagementPage from './pages/StaffManagementPage'
 import DepartmentAndSkills from './pages/DepartmentAndSkills'
 import Scheduler from './pages/Scheduler'
+import DashboardV2 from './pages/DashboardV2'
 // import StaffListPage from './pages/StaffListPage'
 // import DataEntryPage from './pages/DataEntryPage'
 
@@ -19,6 +20,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<RequireAuth><RotationDashboard /></RequireAuth>} />
+          <Route path="/dashboard-v2" element={<RequireAuth><DashboardV2 /></RequireAuth>} />
           <Route path="/scheduler" element={<RequireAuth><Scheduler /></RequireAuth>} />
           <Route path="/leaves" element={<RequireAuth><LeaveSubmissionPage /></RequireAuth>} />
           <Route path="/staff" element={<RequireAuth><StaffManagementPage /></RequireAuth>} />
