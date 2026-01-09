@@ -1004,64 +1004,61 @@ export default function RotationDashboard() {
         <div className="space-y-6">
           <h1 className="text-2xl font-bold text-gray-800"></h1>
 
-          {/* Calendar and Recent shifts side-by-side */}
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="md:col-span-2">
-              <Card>
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => navigateMonth('prev')}
-                        className="p-1 hover:bg-gray-100 rounded"
-                        title="Previous month"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <h3 className="font-semibold">{calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
-                      <button
-                        onClick={() => navigateMonth('next')}
-                        className="p-1 hover:bg-gray-100 rounded"
-                        title="Next month"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-                    {calendarDate.getMonth() !== today.getMonth() && calendarDate.getFullYear() !== today.getFullYear() && (
-                      <button
-                        onClick={() => navigateMonth('today')}
-                        className="text-sm text-indigo-600 hover:text-indigo-700"
-                      >
-                        Today
-                      </button>
-                    )}
+          {/* Calendar - Full Width */}
+          <div>
+            <Card>
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => navigateMonth('prev')}
+                      className="p-1 hover:bg-gray-100 rounded"
+                      title="Previous month"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <h3 className="font-semibold">{calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                    <button
+                      onClick={() => navigateMonth('next')}
+                      className="p-1 hover:bg-gray-100 rounded"
+                      title="Next month"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Filter by department:</label>
-                    <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="border px-2 py-1 rounded text-sm">
-                      <option value="ALL">All departments</option>
-                      {departments && departments.map(d => (<option key={d.id || d.department_id || d.name} value={d.id || d.department_id || d.name}>{d.name || d.department_name || d.name}</option>))}
-                    </select>
+                  {calendarDate.getMonth() !== today.getMonth() && calendarDate.getFullYear() !== today.getFullYear() && (
+                    <button
+                      onClick={() => navigateMonth('today')}
+                      className="text-sm text-indigo-600 hover:text-indigo-700"
+                    >
+                      Today
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">Filter by department:</label>
+                  <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="border px-2 py-1 rounded text-sm">
+                    <option value="ALL">All departments</option>
+                    {departments && departments.map(d => (<option key={d.id || d.department_id || d.name} value={d.id || d.department_id || d.name}>{d.name || d.department_name || d.name}</option>))}
+                  </select>
+                </div>
+              </div>
+              {loading ? <LoadingSkeleton className="h-72 w-full" /> : (
+                <div className="bg-white p-4 rounded">
+                  <div className="grid grid-cols-7 gap-2 text-sm">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (<div key={d} className="text-xs text-gray-500 text-center">{d}</div>))}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-2 mt-2" style={{ minHeight: '420px' }}>
+                    {calendarCells}
                   </div>
                 </div>
-                {loading ? <LoadingSkeleton className="h-72 w-full" /> : (
-                  <div className="bg-white p-4 rounded">
-                    <div className="grid grid-cols-7 gap-2 text-sm">
-                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (<div key={d} className="text-xs text-gray-500 text-center">{d}</div>))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-2 mt-2" style={{ minHeight: '420px' }}>
-                      {calendarCells}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            </div>
-
+              )}
+            </Card>
           </div>
         </div>
 
