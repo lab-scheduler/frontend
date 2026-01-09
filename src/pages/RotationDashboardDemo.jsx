@@ -8,6 +8,7 @@ import { apiFetch } from '../api/api'
 import { OPENAPI_BASE, ORG_SLUG } from '../env'
 import { useAuth } from '../context/AuthContext'
 import { useShiftData } from '../context/ShiftDataContext'
+import { useDashboardCache } from '../context/DashboardCacheContext'
 import { useNavigate } from 'react-router-dom'
 
 
@@ -95,13 +96,14 @@ function KPI({ title, value, sub }) {
    ------------------------- */
 export default function RotationDashboard() {
   const { token } = useAuth()
-  const { fetchShifts, clearCache, loading: shiftsLoading } = useShiftData()
+  const { fetchShifts } = useShiftData()
+  const { cache, getCachedData, setCachedData, setDateRange, clearCache, isCacheValid } = useDashboardCache()
   const navigate = useNavigate()
 
-  const [loading, setLoading] = useState(true)
+  // State
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-
-  const [staff, setStaff] = useState([])
+  const [staff, setStaff] = useState(getCachedData('staff') || [])
   const [shifts, setShifts] = useState([])
   const [skills, setSkills] = useState([])
   const [leaves, setLeaves] = useState([])
@@ -165,11 +167,27 @@ export default function RotationDashboard() {
   useEffect(() => {
     let mounted = true
     async function loadAllData() {
+      if (!token) return
+
+      const start = todayStart, end = todayEnd
+
+      // Check if we have valid cached data
+      if (isCacheValid(start, end, monthStart, monthEnd)) {
+        console.log('📦 Using cached dashboard data')
+        setStaff(getCachedData('staff') || [])
+        setDashboardShifts(getCachedData('dashboardShifts') || [])
+        setCalendarShifts(getCachedData('calendarShifts') || [])
+        setAnalysis(getCachedData('analysis'))
+        setSkills(getCachedData('skills') || [])
+        setLeaves(getCachedData('leaves') || [])
+        setDepartments(getCachedData('departments') || [])
+        return
+      }
+
+      console.log('🔄 Fetching fresh dashboard data')
       setLoading(true)
       setError(null)
       try {
-        const start = todayStart, end = todayEnd
-
         // Fetch all data in parallel
         const staffP = apiFetch(`/api/v1/${ORG_SLUG}/staff`, {}, token)
         const dashboardShiftsP = fetchShifts(start, end) // Use context caching
@@ -194,30 +212,17 @@ export default function RotationDashboard() {
 
         const staffVal = rStaff.status === 'fulfilled' ? rStaff.value : []
 
-        // Extract dashboard shifts - handle multiple response formats
-        let dashboardShiftsVal = []
-        if (rDashboardShifts.status === 'fulfilled') {
-          const data = rDashboardShifts.value
-          if (Array.isArray(data)) {
-            dashboardShiftsVal = data
-          } else if (data?.shifts && Array.isArray(data.shifts)) {
-            dashboardShiftsVal = data.shifts
-          } else if (data?.data && Array.isArray(data.data)) {
-            dashboardShiftsVal = data.data
-          }
+        // Normalize shifts responses - ensure they are always arrays
+        let dashboardShiftsVal = rDashboardShifts.status === 'fulfilled' ? rDashboardShifts.value : []
+        if (!Array.isArray(dashboardShiftsVal)) {
+          console.warn('Dashboard shifts is not an array:', dashboardShiftsVal)
+          dashboardShiftsVal = dashboardShiftsVal?.shifts || dashboardShiftsVal?.data || []
         }
 
-        // Extract calendar shifts - handle multiple response formats
-        let calendarShiftsVal = []
-        if (rCalendarShifts.status === 'fulfilled') {
-          const data = rCalendarShifts.value
-          if (Array.isArray(data)) {
-            calendarShiftsVal = data
-          } else if (data?.shifts && Array.isArray(data.shifts)) {
-            calendarShiftsVal = data.shifts
-          } else if (data?.data && Array.isArray(data.data)) {
-            calendarShiftsVal = data.data
-          }
+        let calendarShiftsVal = rCalendarShifts.status === 'fulfilled' ? rCalendarShifts.value : []
+        if (!Array.isArray(calendarShiftsVal)) {
+          console.warn('Calendar shifts is not an array:', calendarShiftsVal)
+          calendarShiftsVal = calendarShiftsVal?.shifts || calendarShiftsVal?.data || []
         }
 
         const analysisVal = rAnalysis.status === 'fulfilled' ? rAnalysis.value : null
@@ -266,34 +271,30 @@ export default function RotationDashboard() {
           }
         }
 
-        // Ensure dashboardShiftsVal is always an array
-        let finalDashboardShifts = []
-        if (Array.isArray(dashboardShiftsVal)) {
-          finalDashboardShifts = dashboardShiftsVal
-        } else if (dashboardShiftsVal?.shifts && Array.isArray(dashboardShiftsVal.shifts)) {
-          finalDashboardShifts = dashboardShiftsVal.shifts
-        } else if (dashboardShiftsVal?.data && Array.isArray(dashboardShiftsVal.data)) {
-          finalDashboardShifts = dashboardShiftsVal.data
-        }
+        // Set state and cache data
+        setStaff(staffVal)
+        setCachedData('staff', staffVal)
 
-        // Ensure calendarShiftsVal is always an array
-        let finalCalendarShifts = []
-        if (Array.isArray(calendarShiftsVal)) {
-          finalCalendarShifts = calendarShiftsVal
-        } else if (calendarShiftsVal?.shifts && Array.isArray(calendarShiftsVal.shifts)) {
-          finalCalendarShifts = calendarShiftsVal.shifts
-        } else if (calendarShiftsVal?.data && Array.isArray(calendarShiftsVal.data)) {
-          finalCalendarShifts = calendarShiftsVal.data
-        }
+        setDashboardShifts(dashboardShiftsVal)
+        setCachedData('dashboardShifts', dashboardShiftsVal)
 
-        setStaff(staffVal || [])
-        setShifts(finalDashboardShifts)
-        setSkills(skillsVal?.skills || skillsVal || [])
+        setCalendarShifts(calendarShiftsVal)
+        setCachedData('calendarShifts', calendarShiftsVal)
+
+        setAnalysis(analysisVal)
+        setCachedData('analysis', analysisVal)
+
+        setSkills(skillsVal)
+        setCachedData('skills', skillsVal)
+
         setLeaves(leavesVal)
-        setAnalysis(analysisVal?.data || analysisVal || null)
+        setCachedData('leaves', leavesVal)
+
         setDepartments(depsVal)
-        setDashboardShifts(finalDashboardShifts)
-        setCalendarShifts(finalCalendarShifts)
+        setCachedData('departments', depsVal)
+
+        // Cache the date range
+        setDateRange({ todayStart: start, todayEnd: end, monthStart, monthEnd })
 
         // if departments endpoint empty, synthesize from analysis staff (fallback)
         if ((depsVal || []).length === 0 && analysisVal) {
@@ -305,6 +306,7 @@ export default function RotationDashboard() {
             })
           const synthesized = Object.keys(map).map(id => ({ id, name: map[id] }))
           setDepartments(synthesized)
+          setCachedData('departments', synthesized)
         }
       } catch (err) {
         setError(String(err))
@@ -315,7 +317,7 @@ export default function RotationDashboard() {
     loadAllData()
     return () => mounted = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, todayStart, todayEnd, monthStart, monthEnd]) // Removed fetchShifts to prevent infinite loop
+  }, [token, todayStart, todayEnd, monthStart, monthEnd, isCacheValid, getCachedData, setCachedData, setDateRange])
 
   // Today's shifts - filter from dashboardShifts that already contains the data
   const todayShifts = useMemo(() => {
@@ -683,47 +685,27 @@ export default function RotationDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header with glassmorphism effect */}
-      <div className="container mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
+      {/* Header Section */}
+      <div className="container mx-auto px-6 py-6">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            {keyInsight && <div className="text-gray-600 mt-1">{keyInsight}</div>}
+            <h1 className="text-3xl font-bold text-gray-900">Rotation Dashboard</h1>
+            <p className="text-gray-600 mt-1">Staff scheduling and shift management overview</p>
           </div>
-
-          <div className="flex items-center gap-4">
-            {/* Date Range Selector */}
-            <div className="flex items-center gap-2 bg-white border-2 border-gray-200 rounded-xl px-4 py-2 shadow-sm">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-600">From:</label>
-                <input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => handleDateRangeChange(e.target.value, dateRange.end)}
-                  className="text-sm border-0 focus:outline-none focus:ring-0 bg-transparent"
-                />
-              </div>
-              <span className="text-gray-400">—</span>
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-600">To:</label>
-                <input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => handleDateRangeChange(dateRange.start, e.target.value)}
-                  className="text-sm border-0 focus:outline-none focus:ring-0 bg-transparent"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={() => window.location.reload()}
-              className="px-5 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 font-medium shadow-sm"
-            >
-              Refresh
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              clearCache()
+              window.location.reload()
+            }}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh Data
+          </button>
         </div>
       </div>
-      {/* </div> */}
 
       {error && (
         <div className="container mx-auto px-6 mt-6">
@@ -979,85 +961,6 @@ export default function RotationDashboard() {
               </Card>
             </div>
 
-            <div className="md:col-span-1">
-              <Card>
-                <h3 className="font-semibold mb-4">Today's Shifts</h3>
-                <div className="overflow-y-auto" style={{ height: '600px' }}>
-                  {useMemo(() => todayShifts.filter(s => {
-                    // Apply department filter if selected
-                    if (deptFilter === 'ALL') return true
-                    const deptId = s?.department?.id ?? s?.department_id ?? s?.dept_id ?? (typeof s?.department === 'string' ? s.department : null)
-                    return String(deptId) === String(deptFilter)
-                  }), [todayShifts, deptFilter]).map((s, i) => (
-                    <div key={i} className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                      {/* Department header - top left */}
-                      <div className="px-4 py-2 bg-indigo-50 border-b">
-                        <div className="font-semibold text-indigo-700">
-                          {s.department?.name || s.department || s.dept || 'Department'}
-                        </div>
-                      </div>
-
-                      {/* Shift type badge and staff list */}
-                      <div className="p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium"
-                            style={{
-                              backgroundColor: s.shift_type?.toUpperCase() === 'NIGHT' ? '#1e293b' :
-                                s.shift_type?.toUpperCase() === 'DAY' ? '#dbeafe' :
-                                  s.shift_type?.toUpperCase() === 'EVENING' ? '#fef3c7' : '#e5e7eb',
-                              color: s.shift_type?.toUpperCase() === 'NIGHT' ? '#ffffff' :
-                                s.shift_type?.toUpperCase() === 'DAY' ? '#1e40af' :
-                                  s.shift_type?.toUpperCase() === 'EVENING' ? '#92400e' : '#374151'
-                            }}>
-                            {s.shift_type || s.type || s.shiftType || 'SHIFT'}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Coverage: {(() => {
-                              const cov = toNumber(s.coverage ?? s.coverage_rate ?? s.metrics?.coverage)
-                              return cov == null ? '—' : `${cov}%`
-                            })()}
-                          </div>
-                        </div>
-
-                        {/* Staff list */}
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-700 mb-2">Staff Assigned:</div>
-                          {Array.isArray(s.assignments) && s.assignments.length ? (
-                            s.assignments.map((a, idx) => (
-                              <div key={idx} className="text-sm text-gray-800 py-1 px-2 bg-gray-50 rounded">
-                                {a.full_name || a.name}
-                              </div>
-                            ))
-                          ) : Array.isArray(s.assigned_staff) && s.assigned_staff.length ? (
-                            s.assigned_staff.map((a, idx) => (
-                              <div key={idx} className="text-sm text-gray-800 py-1 px-2 bg-gray-50 rounded">
-                                {a.full_name || a.name}
-                              </div>
-                            ))
-                          ) : (
-                            <div className="text-sm text-red-600 italic py-1 px-2 bg-red-50 rounded">
-                              No staff assigned
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {useMemo(() => todayShifts.filter(s => {
-                    if (deptFilter === 'ALL') return true
-                    const deptId = s?.department?.id ?? s?.department_id ?? s?.dept_id ?? (typeof s?.department === 'string' ? s.department : null)
-                    return String(deptId) === String(deptFilter)
-                  }), [todayShifts, deptFilter]).length === 0 && (
-                      <div className="flex items-center justify-center h-64">
-                        <div className="text-center">
-                          <div className="text-gray-400 text-lg mb-2">No shifts scheduled</div>
-                          <div className="text-sm text-gray-500">for today</div>
-                        </div>
-                      </div>
-                    )}
-                </div>
-              </Card>
-            </div>
           </div>
         </div>
 

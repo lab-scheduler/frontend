@@ -9,6 +9,10 @@ import LeaveSubmissionPage from './pages/LeaveSubmissionPage'
 import StaffManagementPage from './pages/StaffManagementPage'
 import DepartmentAndSkills from './pages/DepartmentAndSkills'
 import Scheduler from './pages/Scheduler'
+import DashboardV2 from './pages/DashboardV2'
+// import StaffListPage from './pages/StaffListPage'
+// import DataEntryPage from './pages/DataEntryPage'
+
 import StaffPreviewPage from './pages/StaffPreviewPage'
 import { useOrganization } from './context/OrganizationContext'
 
@@ -31,6 +35,7 @@ export default function App() {
           <Route path="/:orgSlug" element={<OrgSlugValidator />}>
             <Route path="dashboard" element={<RequireAuth><RotationDashboard /></RequireAuth>} />
             <Route path="leaves" element={<RequireAuth><LeaveSubmissionPage /></RequireAuth>} />
+            <Route path="/analytics" element={<RequireAuth><DashboardV2 /></RequireAuth>} />
 
             {/* Staff routes */}
             <Route path="staff/management" element={<RequireAuth><StaffManagementPage /></RequireAuth>} />

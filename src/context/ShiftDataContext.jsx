@@ -40,9 +40,24 @@ export function ShiftDataProvider({ children }) {
 
     try {
       setLoading(true)
-      const shifts = await apiFetch(`/api/v1/${ORG_SLUG}/shifts?start_date=${startDate}&end_date=${endDate}`, {}, token)
+      const response = await apiFetch(`/api/v1/${ORG_SLUG}/shifts?start_date=${startDate}&end_date=${endDate}`, {}, token)
 
-      // Cache the result
+      // Normalize response - handle various formats
+      let shifts = []
+      if (Array.isArray(response)) {
+        shifts = response
+      } else if (response && typeof response === 'object') {
+        // Try common response formats
+        shifts = response.shifts || response.data || response.items || []
+      }
+
+      // Ensure we always return an array
+      if (!Array.isArray(shifts)) {
+        console.warn('Shifts API returned non-array response:', response)
+        shifts = []
+      }
+
+      // Cache the normalized result
       setShiftsCache(prev => new Map(prev).set(cacheKey, shifts))
 
       return shifts
