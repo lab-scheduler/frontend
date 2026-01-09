@@ -5,6 +5,7 @@ import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import { ShiftDataProvider } from './context/ShiftDataContext'
 import { AnalyticsCacheProvider } from './context/AnalyticsCacheContext'
+import { DashboardCacheProvider } from './context/DashboardCacheContext'
 import './styles/index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -13,7 +14,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <AuthProvider>
         <ShiftDataProvider>
           <AnalyticsCacheProvider>
-            <App />
+            <DashboardCacheProvider>
+              <App />
+            </DashboardCacheProvider>
           </AnalyticsCacheProvider>
         </ShiftDataProvider>
       </AuthProvider>
