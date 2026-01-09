@@ -125,18 +125,25 @@ export default function RotationDashboard() {
 
   // Memoize today's date to prevent re-renders
   const today = useMemo(() => new Date(), [])
-  const todayStart = useMemo(() => isoDate(startOfMonth(today)), [today])
-  const todayEnd = useMemo(() => isoDate(endOfMonth(today)), [today])
+
+  // Date range selector state
+  const [dateRange, setDateRange] = useState({
+    start: isoDate(startOfMonth(today)),
+    end: isoDate(endOfMonth(today))
+  })
+
+  const todayStart = dateRange.start
+  const todayEnd = dateRange.end
   const monthStart = useMemo(() => isoDate(startOfMonth(calendarDate)), [calendarDate])
   const monthEnd = useMemo(() => isoDate(endOfMonth(calendarDate)), [calendarDate])
 
-  // Scheduler modal state
-  const [schedulerModalOpen, setSchedulerModalOpen] = useState(false)
-  const [schedulerLoading, setSchedulerLoading] = useState(false)
-  const [schedulerResult, setSchedulerResult] = useState(null)
-
   // Department filter
   const [deptFilter, setDeptFilter] = useState('ALL')
+
+  // Function to update date range
+  function handleDateRangeChange(start, end) {
+    setDateRange({ start, end })
+  }
 
   // Calendar navigation functions
   function navigateMonth(direction) {
@@ -237,12 +244,10 @@ export default function RotationDashboard() {
         }
 
         // Merge calendar analysis assignments into calendar shifts
-        if (calendarAnalysisVal && calendarShiftsVal) {
+        if (calendarAnalysisVal && calendarShiftsVal.length > 0) {
           const calendarAnalysisShifts = calendarAnalysisVal?.data?.report?.shifts || calendarAnalysisVal?.shifts || []
 
-
-
-          if (calendarAnalysisShifts.length > 0 && Array.isArray(calendarShiftsVal)) {
+          if (calendarAnalysisShifts.length > 0) {
             calendarShiftsVal = calendarShiftsVal.map(shift => {
               // Find matching shift in calendar analysis data
               const analysisShift = calendarAnalysisShifts.find(as =>
@@ -263,18 +268,7 @@ export default function RotationDashboard() {
 
               return shift
             })
-
-          } else {
-            console.warn('⚠️ Cannot merge:', {
-              analysisShiftsEmpty: calendarAnalysisShifts.length === 0,
-              calendarShiftsNotArray: !Array.isArray(calendarShiftsVal)
-            })
           }
-        } else {
-          console.warn('⚠️ Missing data for merge:', {
-            hasCalendarAnalysis: !!calendarAnalysisVal,
-            hasCalendarShifts: !!calendarShiftsVal
-          })
         }
 
         // Set state and cache data
@@ -598,101 +592,6 @@ export default function RotationDashboard() {
     } catch (err) {
       // fallback: show emp object
       setStaffDetail(emp)
-    }
-  }
-
-  // Function to run the enhanced scheduler
-  async function runEnhancedScheduler(params) {
-    setSchedulerLoading(true)
-    setSchedulerResult(null)
-    try {
-      // First, check if there are any shifts in the specified date range
-      const { start_date, end_date } = params
-      const shiftsCheck = await fetchShifts(start_date, end_date) // Use context fetch
-
-      const shifts = Array.isArray(shiftsCheck) ? shiftsCheck : (shiftsCheck?.shifts || [])
-
-      // If no shifts exist, warn the user
-      if (shifts.length === 0) {
-        setSchedulerResult({
-          success: false,
-          error: `No shifts found for the selected period (${start_date} to ${end_date}). Please use the Pipeline Generator to create shift patterns before running the scheduler.`,
-          needsShifts: true
-        })
-        setSchedulerLoading(false)
-        return
-      }
-
-      // Simplified payload - only send required fields
-      const payload = {
-        start_date: start_date,
-        end_date: end_date
-      }
-
-
-
-      const response = await apiFetch(`/api/v1/${ORG_SLUG}/schedule/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      }, token)
-
-
-      setSchedulerResult(response)
-
-      // Refresh data after successful run
-      if (response.success || response.status === 'success' || response.message) {
-        // Clear the shift cache immediately
-        clearCache()
-
-        // Show success message
-        setSchedulerResult({
-          ...response,
-          success: true,
-          message: response.message || 'Scheduler completed successfully! Refreshing data...'
-        })
-
-        // Wait a moment to show the success message, then reload data
-        setTimeout(async () => {
-          try {
-            // Fetch shifts for the EXACT date range that was scheduled
-
-            await fetchShifts(start_date, end_date, true) // Force refresh for scheduled range
-
-            // Also refresh current calendar view if needed
-            const scheduledRefresh = await fetchShifts(monthStart, monthEnd, true) // Force refresh calendar
-            setCalendarShifts(scheduledRefresh || [])
-
-            // Refresh dashboard if needed
-            const dashboardRefresh = await fetchShifts(todayStart, todayEnd, true)
-            setDashboardShifts(dashboardRefresh || [])
-
-
-
-            // Close the modal after data is refreshed
-            setTimeout(() => {
-              setSchedulerModalOpen(false)
-              setSchedulerResult(null)
-            }, 1000)
-          } catch (err) {
-            console.error('Error refreshing data:', err)
-            // Still close the modal even if refresh fails
-            setTimeout(() => {
-              window.location.reload()
-            }, 1000)
-          }
-        }, 1500)
-      }
-    } catch (error) {
-      console.error('Scheduler error:', error)
-      setSchedulerResult({
-        success: false,
-        error: String(error)
-      })
-    } finally {
-      setSchedulerLoading(false)
     }
   }
 
@@ -1320,160 +1219,6 @@ export default function RotationDashboard() {
                 </div>
               )}
 
-            </div>
-          </div>
-        )}
-
-        {/* Scheduler Modal */}
-        {schedulerModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black opacity-30" onClick={() => setSchedulerModalOpen(false)} />
-            <div className="relative bg-white w-11/12 md:w-1/2 lg:w-1/3 rounded shadow-lg p-6">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-xl font-semibold">Run Enhanced Scheduler</h3>
-                <button
-                  onClick={() => setSchedulerModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {!schedulerResult ? (
-                <form onSubmit={(e) => {
-                  e.preventDefault()
-                  const formData = new FormData(e.target)
-                  runEnhancedScheduler({
-                    start_date: formData.get('start_date'),
-                    end_date: formData.get('end_date')
-                  })
-                }} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      name="start_date"
-                      required
-                      defaultValue={monthStart}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      name="end_date"
-                      required
-                      defaultValue={monthEnd}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <p className="text-sm text-blue-800">
-                      <strong>Note:</strong> The scheduler will automatically assign staff to shifts based on skills, availability, and fairness constraints.
-                    </p>
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setSchedulerModalOpen(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={schedulerLoading}
-                      className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {schedulerLoading ? 'Running...' : 'Run Scheduler'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-4">
-                  {schedulerResult.success !== false ? (
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="font-semibold text-green-600">Scheduler completed successfully!</span>
-                      </div>
-                      <div className="bg-green-50 border border-green-200 p-4 rounded text-sm space-y-3">
-                        <p className="text-green-700">{schedulerResult.message || 'Staff assignments have been created.'}</p>
-                        {schedulerResult.summary && (
-                          <div className="bg-white rounded p-3 space-y-1 text-green-800">
-                            <div><strong>Total Assignments:</strong> {schedulerResult.summary.total_assignments || 0}</div>
-                            <div><strong>Shifts Covered:</strong> {schedulerResult.summary.shifts_covered || 0}</div>
-                            {schedulerResult.summary.coverage_rate && (
-                              <div><strong>Coverage Rate:</strong> {schedulerResult.summary.coverage_rate}%</div>
-                            )}
-                          </div>
-                        )}
-                        <div className="flex items-center text-green-600 pt-2">
-                          <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Refreshing calendar data...
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="font-semibold text-red-600">Scheduler failed</span>
-                      </div>
-                      <div className="bg-red-50 p-3 rounded text-sm">
-                        <p className="text-red-700">{schedulerResult.error || 'Unknown error occurred'}</p>
-                        {schedulerResult.needsShifts && (
-                          <div className="mt-3 flex gap-2">
-                            <button
-                              onClick={() => {
-                                navigate('/pipeline-generator')
-                                setSchedulerModalOpen(false)
-                              }}
-                              className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700"
-                            >
-                              Go to Pipeline Generator
-                            </button>
-                            <button
-                              onClick={() => setSchedulerResult(null)}
-                              className="px-4 py-2 border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              Try Different Dates
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => {
-                        setSchedulerModalOpen(false)
-                        setSchedulerResult(null)
-                      }}
-                      className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
