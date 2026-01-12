@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import { ORG_SLUG } from '../env'
 import Card from '../components/Card'
 import LoadingSkeleton from '../components/LoadingSkeleton'
+import PageLayout from '../components/ui/PageLayout'
+import Tabs from '../components/ui/Tabs'
+import Alert from '../components/ui/Alert'
 
 const LEAVE_TYPES = ['ANNUAL', 'SICK', 'EMERGENCY', 'URGENT', 'PLANNED']
 
@@ -144,50 +147,26 @@ export default function LeaveSubmissionPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Leave Management</h1>
-
+    <PageLayout
+      title="Leave Management"
+      description="Submit and manage leave requests"
+    >
       {/* Tabs */}
-      <div className="flex border-b mb-6">
-        <button
-          className={`px-4 py-2 font-medium ${activeTab === 'submit'
-            ? 'border-b-2 border-indigo-600 text-indigo-600'
-            : 'text-gray-600 hover:text-gray-800'}`}
-          onClick={() => setActiveTab('submit')}
-        >
-          Submit Leave Request
-        </button>
-        <button
-          className={`px-4 py-2 font-medium ml-6 ${activeTab === 'all'
-            ? 'border-b-2 border-indigo-600 text-indigo-600'
-            : 'text-gray-600 hover:text-gray-800'}`}
-          onClick={() => setActiveTab('all')}
-        >
-          All Leaves
-        </button>
-        {(user?.role === 'MANAGER' || user?.role === 'ADMIN') && (
-          <button
-            className={`px-4 py-2 font-medium ml-6 ${activeTab === 'approval'
-              ? 'border-b-2 border-indigo-600 text-indigo-600'
-              : 'text-gray-600 hover:text-gray-800'}`}
-            onClick={() => setActiveTab('approval')}
-          >
-            Pending Approvals
-          </button>
-        )}
-      </div>
+      <Tabs
+        tabs={[
+          { id: 'submit', label: 'Submit Leave Request' },
+          { id: 'all', label: 'All Leaves' },
+          ...(user?.role === 'MANAGER' || user?.role === 'ADMIN'
+            ? [{ id: 'approval', label: 'Pending Approvals' }]
+            : [])
+        ]}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* Error and Success Messages */}
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          {success}
-        </div>
-      )}
+      {error && <Alert type="error">{error}</Alert>}
+      {success && <Alert type="success">{success}</Alert>}
 
       {/* Submit Leave Tab */}
       {activeTab === 'submit' && (
@@ -374,12 +353,11 @@ export default function LeaveSubmissionPage() {
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Status</p>
-                      <p className={`font-medium ${
-                        leave.status === 'APPROVED' ? 'text-green-600' :
+                      <p className={`font-medium ${leave.status === 'APPROVED' ? 'text-green-600' :
                         leave.status === 'REJECTED' ? 'text-red-600' :
-                        leave.status === 'PENDING' ? 'text-yellow-600' :
-                        'text-gray-600'
-                      }`}>
+                          leave.status === 'PENDING' ? 'text-yellow-600' :
+                            'text-gray-600'
+                        }`}>
                         {leave.status || 'PENDING'}
                       </p>
                     </div>
@@ -424,6 +402,6 @@ export default function LeaveSubmissionPage() {
           )}
         </Card>
       )}
-    </div>
+    </PageLayout>
   )
 }

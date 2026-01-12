@@ -4,6 +4,10 @@ import LoadingSkeleton from '../components/LoadingSkeleton'
 import { apiFetch } from '../api/api'
 import { ORG_SLUG } from '../env'
 import { useAuth } from '../context/AuthContext'
+import PageLayout from '../components/ui/PageLayout'
+import Tabs from '../components/ui/Tabs'
+import Alert from '../components/ui/Alert'
+import Modal from '../components/ui/Modal'
 
 export default function DepartmentAndSkills() {
   const { token } = useAuth()
@@ -152,37 +156,21 @@ export default function DepartmentAndSkills() {
   }
 
   return (
-    <div className="space-y-6 p-4">
-      <div>
-        <h1 className="text-3xl font-bold">Departments and Skills Management</h1>
-        <p className="text-gray-600 mt-1">Manage departments and skills for the organization</p>
-      </div>
-
-      {error && <div className="text-red-600 bg-red-50 p-2 rounded">{error}</div>}
+    <PageLayout
+      title="Departments and Skills Management"
+      description="Manage departments and skills for the organization"
+    >
+      {error && <Alert type="error">{error}</Alert>}
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('departments')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'departments'
-              ? 'border-indigo-500 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-          >
-            Departments
-          </button>
-          <button
-            onClick={() => setActiveTab('skills')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'skills'
-              ? 'border-indigo-500 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-          >
-            Skills
-          </button>
-        </nav>
-      </div>
+      <Tabs
+        tabs={[
+          { id: 'departments', label: 'Departments' },
+          { id: 'skills', label: 'Skills' }
+        ]}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* Departments Tab */}
       {activeTab === 'departments' && (
@@ -295,123 +283,117 @@ export default function DepartmentAndSkills() {
       )}
 
       {/* Add Department Modal */}
-      {showDeptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black opacity-30" onClick={() => setShowDeptModal(false)} />
-          <div className="relative bg-white w-full max-w-md rounded shadow-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Add New Department</h3>
+      <Modal
+        isOpen={showDeptModal}
+        onClose={() => setShowDeptModal(false)}
+        title="Add New Department"
+      >
+        {modalError && <Alert type="error">{modalError}</Alert>}
 
-            {modalError && <div className="text-red-600 bg-red-50 p-2 rounded mb-4">{modalError}</div>}
-
-            <form onSubmit={handleAddDepartment} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Department Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={deptForm.name}
-                  onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., Laboratory, Radiology, Emergency"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowDeptModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={modalLoading}
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {modalLoading ? 'Adding...' : 'Add Department'}
-                </button>
-              </div>
-            </form>
+        <form onSubmit={handleAddDepartment} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Department Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={deptForm.name}
+              onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="e.g., Laboratory, Radiology, Emergency"
+            />
           </div>
-        </div>
-      )}
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowDeptModal(false)}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={modalLoading}
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {modalLoading ? 'Adding...' : 'Add Department'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Add Skill Modal */}
-      {showSkillModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black opacity-30" onClick={() => setShowSkillModal(false)} />
-          <div className="relative bg-white w-full max-w-md rounded shadow-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Add New Skill</h3>
+      <Modal
+        isOpen={showSkillModal}
+        onClose={() => setShowSkillModal(false)}
+        title="Add New Skill"
+      >
+        {modalError && <Alert type="error">{modalError}</Alert>}
 
-            {modalError && <div className="text-red-600 bg-red-50 p-2 rounded mb-4">{modalError}</div>}
-
-            <form onSubmit={handleAddSkill} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Department
-                </label>
-                <select
-                  value={skillForm.department_id}
-                  onChange={(e) => setSkillForm({ ...skillForm, department_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">Select a department (optional)</option>
-                  {departments.map(dept => (
-                    <option key={dept.id} value={dept.id}>{dept.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Skill Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={skillForm.skill_name}
-                  onChange={(e) => setSkillForm({ ...skillForm, skill_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Required Certification
-                </label>
-                <input
-                  type="text"
-                  value={skillForm.required_certification}
-                  onChange={(e) => setSkillForm({ ...skillForm, required_certification: e.target.value })}
-                  placeholder="e.g., Phlebotomy Certificate, BLS Certification"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter any required certifications for this skill</p>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowSkillModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={modalLoading}
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {modalLoading ? 'Adding...' : 'Add Skill'}
-                </button>
-              </div>
-            </form>
+        <form onSubmit={handleAddSkill} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Department
+            </label>
+            <select
+              value={skillForm.department_id}
+              onChange={(e) => setSkillForm({ ...skillForm, department_id: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Select a department (optional)</option>
+              {departments.map(dept => (
+                <option key={dept.id} value={dept.id}>{dept.name}</option>
+              ))}
+            </select>
           </div>
-        </div>
-      )}
-    </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Skill Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={skillForm.skill_name}
+              onChange={(e) => setSkillForm({ ...skillForm, skill_name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Required Certification
+            </label>
+            <input
+              type="text"
+              value={skillForm.required_certification}
+              onChange={(e) => setSkillForm({ ...skillForm, required_certification: e.target.value })}
+              placeholder="e.g., Phlebotomy Certificate, BLS Certification"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">Enter any required certifications for this skill</p>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowSkillModal(false)}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={modalLoading}
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {modalLoading ? 'Adding...' : 'Add Skill'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </PageLayout>
   )
 }

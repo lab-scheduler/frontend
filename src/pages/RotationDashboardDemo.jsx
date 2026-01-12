@@ -845,8 +845,7 @@ export default function RotationDashboard() {
           <div className="bg-white p-4 rounded shadow-sm relative">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-gray-500">Estimated cost</div>
-                <div className="text-2xl font-bold">{estimatedCost ? 'xxx' : '—'}</div>
+                <div className="text-2xl font-bold">{estimatedCost ? fmtCurrency(estimatedCost) : '—'}</div>
                 <div className="text-xs text-gray-400 mt-1">Window cost estimate</div>
               </div>
               <InfoTooltip text="Total estimated labor cost for the scheduled period" />
@@ -913,13 +912,13 @@ export default function RotationDashboard() {
                   <div className="text-xs text-gray-500">Optimization potential</div>
                   <InfoTooltip text="Potential cost savings from schedule optimization" />
                 </div>
-                <div className="font-medium">{cost.optimization_potential ? 'xxx' : '—'}</div>
+                <div className="font-medium">{cost.optimization_potential ? fmtCurrency(cost.optimization_potential) : '—'}</div>
 
                 <div className="flex items-center">
                   <div className="text-xs text-gray-500">Overtime cost</div>
                   <InfoTooltip text="Total estimated cost of overtime hours in the schedule" />
                 </div>
-                <div className="font-medium">{cost.overtime_cost ? 'xxx' : '—'}</div>
+                <div className="font-medium">{cost.overtime_cost ? fmtCurrency(cost.overtime_cost) : '—'}</div>
               </div>
             </Card>
           </div>
@@ -1149,7 +1148,7 @@ export default function RotationDashboard() {
                     <div className="text-sm text-gray-500 mt-1">Cost (est): {(() => {
                       const arr = selectedDay.shifts || []
                       const sum = arr.reduce((acc, x) => acc + (toNumber(x.metrics?.estimated_cost) || toNumber(x.estimated_cost) || 0), 0)
-                      return sum > 0 ? 'xxx' : '—'
+                      return sum > 0 ? fmtCurrency(sum) : '—'
                     })()}</div>
                   </div>
 

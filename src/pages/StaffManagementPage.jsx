@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import { ORG_SLUG } from '../env'
 import Card from '../components/Card'
 import LoadingSkeleton from '../components/LoadingSkeleton'
+import PageLayout from '../components/ui/PageLayout'
+import Tabs from '../components/ui/Tabs'
+import Alert from '../components/ui/Alert'
 
 const ROLES = ['STAFF', 'MANAGER', 'ADMIN']
 
@@ -61,8 +64,8 @@ export default function StaffManagementPage() {
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked :
-              type === 'number' ? Number(value) :
-              value
+        type === 'number' ? Number(value) :
+          value
     }))
   }
 
@@ -99,40 +102,23 @@ export default function StaffManagementPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Staff Management</h1>
-
+    <PageLayout
+      title="Staff Management"
+      description="Manage staff members and their information"
+    >
       {/* Tabs */}
-      <div className="flex border-b mb-6">
-        <button
-          className={`px-4 py-2 font-medium ${activeTab === 'list'
-            ? 'border-b-2 border-indigo-600 text-indigo-600'
-            : 'text-gray-600 hover:text-gray-800'}`}
-          onClick={() => setActiveTab('list')}
-        >
-          Staff List
-        </button>
-        <button
-          className={`px-4 py-2 font-medium ml-6 ${activeTab === 'add'
-            ? 'border-b-2 border-indigo-600 text-indigo-600'
-            : 'text-gray-600 hover:text-gray-800'}`}
-          onClick={() => setActiveTab('add')}
-        >
-          Add Staff
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { id: 'list', label: 'Staff List' },
+          { id: 'add', label: 'Add Staff' }
+        ]}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* Error and Success Messages */}
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          {success}
-        </div>
-      )}
+      {error && <Alert type="error">{error}</Alert>}
+      {success && <Alert type="success">{success}</Alert>}
 
       {/* Staff List Tab */}
       {activeTab === 'list' && (
@@ -187,11 +173,10 @@ export default function StaffManagementPage() {
                         {member.phone}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          member.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${member.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
                           member.role === 'MANAGER' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
+                            'bg-gray-100 text-gray-800'
+                          }`}>
                           {member.role}
                         </span>
                       </td>
@@ -349,6 +334,6 @@ export default function StaffManagementPage() {
           </form>
         </Card>
       )}
-    </div>
+    </PageLayout>
   )
 }
