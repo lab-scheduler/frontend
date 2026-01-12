@@ -2,7 +2,7 @@
     "name": "lab-scheduler-frontend",
     "version": "1.0.0",
     "private": true,
-    "proxy": "https://lab-scheduler.up.railway.app",
+    "proxy": "https://rpawe9zvpj.ap-southeast-1.awsapprunner.com",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -22,4 +22,5 @@
         "tailwindcss": "^3.4.3",
         "vite": "^5.0.0"
     }
+
 }
