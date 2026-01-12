@@ -55,7 +55,8 @@ export default function Scheduler() {
             balance_workload: true,
             max_hours_per_staff: 40,
             max_days_per_week: 5,
-            allow_weekends: true
+            allow_weekends: true,
+            autoRunScheduler: false  // NEW: Auto-run scheduler after shift generation
         }
     })
 
@@ -199,6 +200,72 @@ export default function Scheduler() {
             ...formData,
             departments: formData.departments.filter((_, i) => i !== index)
         })
+    }
+
+    // Duplicate department rule
+    function duplicateDepartmentRule(index) {
+        const ruleToDuplicate = formData.departments[index]
+        const duplicatedRule = { ...ruleToDuplicate }
+        setFormData({
+            ...formData,
+            departments: [...formData.departments, duplicatedRule]
+        })
+        setSuccess('Department rule duplicated successfully')
+        setTimeout(() => setSuccess(null), 3000)
+    }
+
+    // Use last configuration
+    function useLastConfiguration() {
+        if (templates.length === 0) {
+            setError('No previous configurations found')
+            setTimeout(() => setError(null), 3000)
+            return
+        }
+        const lastTemplate = templates[0] // Most recent template
+        handleLoadTemplate(lastTemplate)
+    }
+
+    // Date range presets
+    function setWeeklyRotation() {
+        const today = new Date()
+        const nextWeek = new Date(today)
+        nextWeek.setDate(today.getDate() + 7)
+
+        setFormData({
+            ...formData,
+            start_date: today.toISOString().slice(0, 10),
+            end_date: nextWeek.toISOString().slice(0, 10)
+        })
+        setSuccess('Date range set to next 7 days (Weekly)')
+        setTimeout(() => setSuccess(null), 2000)
+    }
+
+    function setMonthlyRotation() {
+        const today = new Date()
+        const nextMonth = new Date(today)
+        nextMonth.setMonth(today.getMonth() + 1)
+
+        setFormData({
+            ...formData,
+            start_date: today.toISOString().slice(0, 10),
+            end_date: nextMonth.toISOString().slice(0, 10)
+        })
+        setSuccess('Date range set to next 30 days (Monthly)')
+        setTimeout(() => setSuccess(null), 2000)
+    }
+
+    function setYearlyRotation() {
+        const today = new Date()
+        const nextYear = new Date(today)
+        nextYear.setFullYear(today.getFullYear() + 1)
+
+        setFormData({
+            ...formData,
+            start_date: today.toISOString().slice(0, 10),
+            end_date: nextYear.toISOString().slice(0, 10)
+        })
+        setSuccess('Date range set to next 365 days (Yearly)')
+        setTimeout(() => setSuccess(null), 2000)
     }
 
     // Run Scheduler handler
@@ -348,19 +415,32 @@ export default function Scheduler() {
                 console.error('Failed to save to history:', err)
             }
 
-            // Show success modal with Run Scheduler option
-            setSuccessData({
-                shiftsCreated: response.summary?.total || 0,
-                dateRange: {
+            // Check if auto-run scheduler is enabled
+            if (formData.options.autoRunScheduler) {
+                // Automatically run scheduler
+                setLastGeneratedRange({
                     start_date: formData.start_date,
                     end_date: formData.end_date
-                }
-            })
-            setLastGeneratedRange({
-                start_date: formData.start_date,
-                end_date: formData.end_date
-            })
-            setShowSuccessModal(true)
+                })
+                await runEnhancedScheduler({
+                    start_date: formData.start_date,
+                    end_date: formData.end_date
+                })
+            } else {
+                // Show success modal with Run Scheduler option
+                setSuccessData({
+                    shiftsCreated: response.summary?.total || 0,
+                    dateRange: {
+                        start_date: formData.start_date,
+                        end_date: formData.end_date
+                    }
+                })
+                setLastGeneratedRange({
+                    start_date: formData.start_date,
+                    end_date: formData.end_date
+                })
+                setShowSuccessModal(true)
+            }
         } catch (err) {
             setError(String(err))
         } finally {
@@ -384,15 +464,28 @@ export default function Scheduler() {
                     <h1 className="text-3xl font-bold text-gray-800">Scheduler</h1>
                     <p className="text-gray-600 mt-1">Generate shifts for your departments</p>
                 </div>
-                <button
-                    onClick={() => setShowTemplates(!showTemplates)}
-                    className="px-4 py-2 text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-2"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {showTemplates ? 'Hide Shift History' : 'Show Shift History'}
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={useLastConfiguration}
+                        disabled={templates.length === 0}
+                        className="px-4 py-2 text-green-600 hover:text-green-700 font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Load the most recent configuration"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Use Last Config
+                    </button>
+                    <button
+                        onClick={() => setShowTemplates(!showTemplates)}
+                        className="px-4 py-2 text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-2"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {showTemplates ? 'Hide Shift History' : 'Show Shift History'}
+                    </button>
+                </div>
             </div>
 
             {error && <div className="text-red-600 bg-red-50 p-4 rounded-lg border border-red-200">{error}</div>}
@@ -492,38 +585,92 @@ export default function Scheduler() {
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Date Range & Generate Button */}
                 <Card>
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                        <div className="flex-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Start Date
-                            </label>
-                            <input
-                                type="date"
-                                required
-                                value={formData.start_date}
-                                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
+                    <div className="space-y-4">
+                        {/* Date Range Presets */}
+                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg p-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span className="text-sm font-semibold text-blue-900">Quick Date Ranges</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={setWeeklyRotation}
+                                        className="px-3 py-1.5 bg-white border-2 border-green-300 text-green-700 rounded-md hover:bg-green-50 text-xs font-medium transition-all hover:scale-105"
+                                    >
+                                        📅 Weekly (7 days)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={setMonthlyRotation}
+                                        className="px-3 py-1.5 bg-white border-2 border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 text-xs font-medium transition-all hover:scale-105"
+                                    >
+                                        📆 Monthly (30 days)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={setYearlyRotation}
+                                        className="px-3 py-1.5 bg-white border-2 border-purple-300 text-purple-700 rounded-md hover:bg-purple-50 text-xs font-medium transition-all hover:scale-105"
+                                    >
+                                        🗓️ Yearly (365 days)
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                End Date
-                            </label>
-                            <input
-                                type="date"
-                                required
-                                value={formData.end_date}
-                                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
+
+                        <div className="flex flex-col md:flex-row gap-4 items-end">
+                            <div className="flex-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Start Date
+                                </label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={formData.start_date}
+                                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    End Date
+                                </label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={formData.end_date}
+                                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={loading || formData.departments.length === 0}
+                                className="px-8 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium h-[42px]"
+                            >
+                                {loading ? 'Generating...' : 'Generate Shifts'}
+                            </button>
                         </div>
-                        <button
-                            type="submit"
-                            disabled={loading || formData.departments.length === 0}
-                            className="px-8 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium h-[42px]"
-                        >
-                            {loading ? 'Generating...' : 'Generate Shifts'}
-                        </button>
+
+                        {/* Auto-run Scheduler Option */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                            <input
+                                type="checkbox"
+                                id="autoRunScheduler"
+                                checked={formData.options.autoRunScheduler}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    options: { ...formData.options, autoRunScheduler: e.target.checked }
+                                })}
+                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                            />
+                            <label htmlFor="autoRunScheduler" className="text-sm text-gray-700 cursor-pointer">
+                                Automatically run scheduler after generating shifts
+                            </label>
+                        </div>
                     </div>
                 </Card>
 
@@ -598,7 +745,18 @@ export default function Scheduler() {
                                                 onClick={() => openEditRuleModal(index)}
                                                 className="flex-1 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
                                             >
-                                                Edit Details
+                                                Edit
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => duplicateDepartmentRule(index)}
+                                                className="flex-1 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium flex items-center justify-center gap-1"
+                                                title="Duplicate this rule"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                </svg>
+                                                Duplicate
                                             </button>
                                             <button
                                                 type="button"
@@ -739,7 +897,7 @@ export default function Scheduler() {
                                                 setSchedulerResult(null)
                                                 navigate('/')
                                             }}
-                                            className="w-full mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                                            className="w-full mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md"
                                         >
                                             View Dashboard
                                         </button>
@@ -817,7 +975,7 @@ export default function Scheduler() {
                                         setShowSuccessModal(false)
                                         navigate('/')
                                     }}
-                                    className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                                    className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg font-medium"
                                 >
                                     View Dashboard
                                 </button>

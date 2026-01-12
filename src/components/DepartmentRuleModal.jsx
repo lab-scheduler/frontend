@@ -18,6 +18,41 @@ export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, dep
     const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     const shiftTypes = ['DAY', 'EVENING', 'NIGHT']
 
+    // Quick presets
+    const PRESETS = {
+        STANDARD_WEEKDAY: {
+            shift_types: ['DAY'],
+            recurrence_days: [0, 1, 2, 3, 4],
+            min_staff: 1,
+            max_staff: 2,
+            estimated_hours: 8,
+            priority: 3
+        },
+        COVERAGE_24_7: {
+            shift_types: ['DAY', 'EVENING', 'NIGHT'],
+            recurrence_days: [0, 1, 2, 3, 4, 5, 6],
+            min_staff: 2,
+            max_staff: 4,
+            estimated_hours: 8,
+            priority: 4
+        },
+        WEEKEND_ONLY: {
+            shift_types: ['DAY'],
+            recurrence_days: [5, 6],
+            min_staff: 1,
+            max_staff: 2,
+            estimated_hours: 8,
+            priority: 3
+        }
+    }
+
+    function applyPreset(presetKey) {
+        setFormData({
+            ...formData,
+            ...PRESETS[presetKey]
+        })
+    }
+
     function toggleShiftType(type) {
         const types = formData.shift_types || []
         if (types.includes(type)) {
@@ -45,6 +80,31 @@ export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, dep
         } else {
             setFormData({ ...formData, required_skill_ids: [...skills, skillId] })
         }
+    }
+
+    // Bulk selection functions
+    function selectWeekdays() {
+        setFormData({ ...formData, recurrence_days: [0, 1, 2, 3, 4] })
+    }
+
+    function selectWeekend() {
+        setFormData({ ...formData, recurrence_days: [5, 6] })
+    }
+
+    function selectAllDays() {
+        setFormData({ ...formData, recurrence_days: [0, 1, 2, 3, 4, 5, 6] })
+    }
+
+    function selectAllShifts() {
+        setFormData({ ...formData, shift_types: ['DAY', 'EVENING', 'NIGHT'] })
+    }
+
+    function selectAllSkills() {
+        setFormData({ ...formData, required_skill_ids: skills.map(s => s.id) })
+    }
+
+    function clearAllSkills() {
+        setFormData({ ...formData, required_skill_ids: [] })
     }
 
     function validate() {
@@ -84,6 +144,39 @@ export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, dep
                 </div>
 
                 <div className="p-6 space-y-6">
+                    {/* Quick Presets */}
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <h3 className="font-semibold text-indigo-900">Quick Presets</h3>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => applyPreset('STANDARD_WEEKDAY')}
+                                className="px-3 py-2 bg-white border-2 border-indigo-300 text-indigo-700 rounded-md hover:bg-indigo-50 text-sm font-medium transition-all hover:scale-105"
+                            >
+                                📅 Standard Weekday
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => applyPreset('COVERAGE_24_7')}
+                                className="px-3 py-2 bg-white border-2 border-purple-300 text-purple-700 rounded-md hover:bg-purple-50 text-sm font-medium transition-all hover:scale-105"
+                            >
+                                🌙 24/7 Coverage
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => applyPreset('WEEKEND_ONLY')}
+                                className="px-3 py-2 bg-white border-2 border-green-300 text-green-700 rounded-md hover:bg-green-50 text-sm font-medium transition-all hover:scale-105"
+                            >
+                                🎉 Weekend Only
+                            </button>
+                        </div>
+                        <p className="text-xs text-indigo-600 mt-2">Click a preset to auto-fill common configurations</p>
+                    </div>
                     {/* Department and Priority */}
                     <div className="grid md:grid-cols-2 gap-4">
                         <div>
@@ -164,9 +257,18 @@ export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, dep
 
                     {/* Shift Types */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Shift Types *
-                        </label>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                                Shift Types *
+                            </label>
+                            <button
+                                type="button"
+                                onClick={selectAllShifts}
+                                className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                            >
+                                Select All
+                            </button>
+                        </div>
                         <div className="flex gap-2">
                             {shiftTypes.map(type => (
                                 <button
@@ -187,9 +289,34 @@ export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, dep
 
                     {/* Recurrence Days */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Recurrence Days *
-                        </label>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                                Recurrence Days *
+                            </label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={selectWeekdays}
+                                    className="text-xs text-green-600 hover:text-green-700 font-medium"
+                                >
+                                    Weekdays
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={selectWeekend}
+                                    className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                                >
+                                    Weekend
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={selectAllDays}
+                                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                                >
+                                    All Days
+                                </button>
+                            </div>
+                        </div>
                         <div className="flex gap-2">
                             {weekDays.map((day, index) => (
                                 <button
@@ -210,9 +337,27 @@ export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, dep
 
                     {/* Required Skills */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Required Skills
-                        </label>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                                Required Skills
+                            </label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={selectAllSkills}
+                                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                                >
+                                    Select All
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={clearAllSkills}
+                                    className="text-xs text-gray-600 hover:text-gray-700 font-medium"
+                                >
+                                    Clear All
+                                </button>
+                            </div>
+                        </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 border border-gray-200 rounded-md">
                             {skills.map(skill => (
                                 <button
