@@ -156,6 +156,47 @@ export default function RotationDashboard() {
   const [dashboardShifts, setDashboardShifts] = useState([])
   const [calendarShifts, setCalendarShifts] = useState([])
 
+  // Modal loading states to show loading indicator
+  const [dayModalLoading, setDayModalLoading] = useState(false)
+  const [staffModalLoading, setStaffModalLoading] = useState(false)
+
+  // Create a department map for quick lookup (memoized)
+  const departmentMap = useMemo(() => {
+    const map = new Map()
+    if (Array.isArray(departments)) {
+      departments.forEach(d => {
+        // Support both string id and numeric id
+        const id = String(d.id || d.department_id || '')
+        if (id) {
+          map.set(id, d)
+          map.set(d.name, d) // Also index by name for fallback
+        }
+      })
+    }
+    return map
+  }, [departments])
+
+  // Helper to enrich shift with department name
+  const enrichShiftWithDepartment = useCallback((shift) => {
+    if (!shift) return shift
+    // If department already has a name, return as-is
+    if (shift.department?.name) return shift
+
+    // Try to find department by ID
+    const deptId = String(shift.department_id || shift.dept_id || shift.department?.id || '')
+    if (deptId && departmentMap.has(deptId)) {
+      return {
+        ...shift,
+        department: {
+          ...shift.department,
+          ...departmentMap.get(deptId)
+        }
+      }
+    }
+
+    return shift
+  }, [departmentMap])
+
   // Load all data (dashboard + calendar) in a single optimized effect
   useEffect(() => {
     let mounted = true
@@ -420,22 +461,37 @@ export default function RotationDashboard() {
      modal / click handlers (FIXED staff fetching & mapping)
      - improved: handle response shapes -> res.data || res
      - prefer analysis.report.staff summary for offline details; fallback to API
+     - PERFORMANCE: Use useCallback to prevent unnecessary re-renders
   ------------------------- */
-  async function openDayModal(dateKey) {
-    // Use calendarShifts for the day modal (consistent with calendar view)
-    const dayShifts = scheduleMap[dateKey] || (filteredCalendarShifts.filter(s => (s.shift_date || s.date || '').startsWith(dateKey)))
+  const openDayModal = useCallback(async (dateKey) => {
+    // Prevent multiple simultaneous requests
+    if (dayModalLoading) return
+    setDayModalLoading(true)
 
-    // Fetch detailed shift data AND analysis data with assignments for this specific date
     try {
+      // Use calendarShifts for the day modal (consistent with calendar view)
+      const dayShifts = scheduleMap[dateKey] || (filteredCalendarShifts.filter(s => (s.shift_date || s.date || '').startsWith(dateKey)))
 
+      // Check if we already have detailed data in analysis (from the initial load)
+      const analysisShiftsForDate = (analysisShifts || []).filter(s =>
+        (s.shift_date || s.date || '').startsWith(dateKey)
+      )
 
-      // Fetch both shifts and analysis in parallel
+      // If we have analysis data with assignments, use it directly without extra API call
+      if (analysisShiftsForDate.length > 0) {
+        // Enrich with department names
+        const enrichedShifts = analysisShiftsForDate.map(enrichShiftWithDepartment)
+        setSelectedDay({ date: dateKey, shifts: enrichedShifts })
+        setDayModalOpen(true)
+        setDayModalLoading(false) // Reset loading state
+        return
+      }
+
+      // Fetch detailed shift data AND analysis data with assignments for this specific date
       const [detailedShifts, analysisData] = await Promise.all([
         apiFetch(`/api/v1/${ORG_SLUG}/shifts?start_date=${dateKey}&end_date=${dateKey}`, {}, token),
         apiFetch(`/api/v1/${ORG_SLUG}/analysis/range?start=${dateKey}&end=${dateKey}&detailed=true`, {}, token)
       ])
-
-
 
       // Extract shifts from analysis if available
       const analysisShifts = analysisData?.data?.report?.shifts || analysisData?.shifts || []
@@ -466,42 +522,55 @@ export default function RotationDashboard() {
         })
       }
 
+      // Enrich all shifts with department names
+      const enrichedShifts = shiftsToShow.map(enrichShiftWithDepartment)
 
-      setSelectedDay({ date: dateKey, shifts: shiftsToShow })
+      setSelectedDay({ date: dateKey, shifts: enrichedShifts })
     } catch (err) {
       console.error('Error fetching detailed shifts:', err)
       // Fallback to calendar shifts if fetch fails
-      setSelectedDay({ date: dateKey, shifts: dayShifts })
+      const dayShifts = scheduleMap[dateKey] || (filteredCalendarShifts.filter(s => (s.shift_date || s.date || '').startsWith(dateKey)))
+      const enrichedShifts = dayShifts.map(enrichShiftWithDepartment)
+      setSelectedDay({ date: dateKey, shifts: enrichedShifts })
+    } finally {
+      setDayModalLoading(false)
+      setDayModalOpen(true)
     }
+  }, [dayModalLoading, scheduleMap, filteredCalendarShifts, analysisShifts, enrichShiftWithDepartment, token])
 
-    setDayModalOpen(true)
-  }
+  // Memoize report data to avoid recalculating
+  const memoizedReport = useMemo(() => report, [analysis])
 
-  async function openStaffDetail(emp, date = null) {
+  const openStaffDetail = useCallback(async (emp, date = null) => {
     // emp: may be { employee_id, id, full_name, name } or plain id
     // date: optional date string (YYYY-MM-DD) for daily view
+    // Prevent multiple simultaneous requests
+    if (staffModalLoading) return
+    setStaffModalLoading(true)
     setStaffDetail(null)
     setStaffModalOpen(true)
+
     try {
       const id = typeof emp === 'string' ? emp : (emp.employee_id || emp.id || emp.employeeId)
       if (!id) {
         // if object lacks id, just show what we have
         setStaffDetail(emp)
+        setStaffModalLoading(false) // Reset loading state
         return
       }
 
       // First try to find in analysis.report.staff_details or report.staff_summary or report.staff
-      const staffSummary = report?.staff_details || report?.staff_summary || report?.staff || []
+      const staffSummary = memoizedReport?.staff_details || memoizedReport?.staff_summary || memoizedReport?.staff || []
       let found = Array.isArray(staffSummary) ? staffSummary.find(x => (String(x.employee_id) === String(id) || String(x.id) === String(id))) : null
 
       // If we have a date, get daily shift details
       if (date && found) {
-        // Try multiple possible shift data sources
+        // Try multiple possible shift data sources (use memoized values)
         const shiftSources = [
-          report?.shifts || [],
-          report?.data?.shifts || [],
+          memoizedReport?.shifts || [],
+          memoizedReport?.data?.shifts || [],
           analysisShifts || [],
-          shifts || []
+          []
         ]
 
         const allShifts = shiftSources.flat()
@@ -527,45 +596,45 @@ export default function RotationDashboard() {
           return isAssigned
         })
 
-        // Debug logging
-        if (import.meta.env.DEV) {
-          // Calculate daily hours from shifts
-          let dailyHours = 0
-          dailyShifts.forEach(s => {
-            const hours = toNumber(s.hours || s.duration || 8)
-            if (hours) {
-              dailyHours += hours
-            }
-          })
-
-          // Get unique skills used today
-          const dailySkills = new Set()
-          dailyShifts.forEach(s => {
-            const assignment = s.assignments.find(a => a.employee_id === id)
-            if (assignment?.skills_matched) {
-              assignment.skills_matched.forEach(skill => dailySkills.add(skill))
-            }
-          })
-
-          // Create daily-specific view
-          found = {
-            ...found,
-            _isDailyView: true,
-            _date: date,
-            _shifts: dailyShifts,
-            daily_hours: Math.min(dailyHours, 24), // Cap at 24 hours
-            daily_shifts: dailyShifts.length,
-            daily_skills: Array.from(dailySkills),
-            shift_details: dailyShifts.map(s => ({
-              shift_id: s.shift_id,
-              type: s.type,
-              department: s.department,
-              hours: s.requirements?.hours || 8,
-              assignment: s.assignments.find(a => a.employee_id === id),
-              coverage: s.assignments?.length || 0,
-              required: s.requirements?.min_staff || 1
-            }))
+        // Calculate daily hours from shifts
+        let dailyHours = 0
+        dailyShifts.forEach(s => {
+          const hours = toNumber(s.hours || s.duration || 8)
+          if (hours) {
+            dailyHours += hours
           }
+        })
+
+        // Get unique skills used today
+        const dailySkills = new Set()
+        dailyShifts.forEach(s => {
+          const assignment = s.assignments?.find(a => a.employee_id === id)
+          if (assignment?.skills_matched) {
+            assignment.skills_matched.forEach(skill => dailySkills.add(skill))
+          }
+        })
+
+        // Enrich shift details with department info
+        const enrichedShiftDetails = dailyShifts.map(s => ({
+          shift_id: s.shift_id,
+          type: s.type,
+          department: s.department,
+          hours: s.requirements?.hours || 8,
+          assignment: s.assignments?.find(a => a.employee_id === id),
+          coverage: s.assignments?.length || 0,
+          required: s.requirements?.min_staff || 1
+        }))
+
+        // Create daily-specific view
+        found = {
+          ...found,
+          _isDailyView: true,
+          _date: date,
+          _shifts: dailyShifts,
+          daily_hours: Math.min(dailyHours, 24), // Cap at 24 hours
+          daily_shifts: dailyShifts.length,
+          daily_skills: Array.from(dailySkills),
+          shift_details: enrichedShiftDetails
         }
       }
 
@@ -591,15 +660,15 @@ export default function RotationDashboard() {
       // Ensure performance
       if (!normalized.performance && found?.performance_summary) normalized.performance = found.performance_summary
 
-      if (import.meta.env.DEV) {
-
-      }
       setStaffDetail(normalized)
     } catch (err) {
+      console.error('Error fetching staff detail:', err)
       // fallback: show emp object
       setStaffDetail(emp)
+    } finally {
+      setStaffModalLoading(false)
     }
-  }
+  }, [staffModalLoading, memoizedReport, analysisShifts, token])
 
   // Function to run the enhanced scheduler
   async function runEnhancedScheduler(params) {
@@ -731,12 +800,28 @@ export default function RotationDashboard() {
       const isToday = isoDate(today) === key
 
       // Calculate average coverage for the day
-      let coveragePercentage = 100 // Default to 100% if no shifts
+      let coveragePercentage = 0
       if (count > 0) {
-        const coverages = dayShifts.map(s => toNumber(s.coverage || s.coverage_rate || s.metrics?.coverage)).filter(v => v != null)
+        // Try multiple ways to get coverage percentage
+        const coverages = dayShifts.map(s => {
+          // 1. Try direct coverage field
+          let cov = toNumber(s.coverage || s.coverage_rate || s.metrics?.coverage)
+          if (cov != null) return Math.min(100, cov) // Cap at 100%
+
+          // 2. Try calculating from assignments vs requirements
+          const assignedCount = s.assignments?.length || s.assigned_count || s.assigned || 0
+          const requiredCount = s.requirements?.min_staff || s.required || s.min_staff || 1
+          if (assignedCount >= 0 && requiredCount > 0) {
+            return Math.min(100, (assignedCount / requiredCount) * 100) // Cap at 100%
+          }
+
+          return null
+        }).filter(v => v != null)
+
         if (coverages.length > 0) {
-          coveragePercentage = coverages.reduce((a, b) => a + b, 0) / coverages.length
+          coveragePercentage = Math.min(100, coverages.reduce((a, b) => a + b, 0) / coverages.length) // Cap at 100%
         }
+        // If no coverage data at all, stays at 0
       }
 
       // Determine status color based on coverage and shift count
@@ -977,27 +1062,7 @@ export default function RotationDashboard() {
           </div>
         </div>
 
-        {/* Optimization opportunities - full width horizontal line */}
-        <div className="mt-6">
-          <Card>
-            <h3 className="font-semibold mb-4">Optimization opportunities</h3>
-            {(report?.optimization_opportunities || []).length ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {report.optimization_opportunities.map((op, i) => (
-                  <div key={i} className="p-4 border rounded-lg hover:shadow-md transition-shadow">
-                    <div className="font-semibold text-lg mb-2">{op.area}</div>
-                    <div className="text-sm text-gray-600 mb-3">{op.implementation}</div>
-                    <div className="text-sm text-indigo-600 font-semibold mb-3">{op.potential_savings}</div>
-                    <div className="flex gap-2">
-                      <button className="px-3 py-1.5 text-xs border rounded hover:bg-gray-50 transition-colors">Simulate</button>
-                      <button className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors">Apply</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : <div className="text-sm text-gray-500">No opportunities suggested</div>}
-          </Card>
-        </div>
+
 
         {/* Shift Details Section */}
         <div className="space-y-6">
@@ -1062,258 +1127,265 @@ export default function RotationDashboard() {
         </div>
 
         {/* Day modal (fixed) - ensure numeric formatting and avoid [Object] */}
-        {dayModalOpen && selectedDay && (
+        {dayModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black opacity-30" onClick={() => { setDayModalOpen(false); setSelectedDay(null) }} />
+            <div className="absolute inset-0 bg-black opacity-30" onClick={() => { if (!dayModalLoading) { setDayModalOpen(false); setSelectedDay(null) } }} />
             <div className="relative bg-white w-11/12 md:w-3/4 lg:w-2/3 max-h-[80vh] overflow-auto rounded shadow-lg p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-xl font-semibold">Overview — {selectedDay.date}</h3>
-                  <div className="text-sm text-gray-500 mt-1">
-                    {(scheduleMap[selectedDay.date] || []).length} shift(s) • {(() => {
-                      const arr = scheduleMap[selectedDay.date] || []
-                      if (arr.length === 0) return 'No shifts'
-                      const covs = arr.map(x => toNumber(x.coverage ?? x.coverage_rate ?? x.metrics?.coverage)).filter(v => v != null)
-                      const avg = covs.length ? (covs.reduce((a, b) => a + b, 0) / covs.length) : null
-                      return avg == null ? 'Avg coverage: N/A' : `Avg coverage: ${avg.toFixed(1)}%`
-                    })()}
-                  </div>
+              {/* Loading indicator */}
+              {dayModalLoading && !selectedDay && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <span className="ml-3 text-gray-600">Loading shift details...</span>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => { setDayModalOpen(false); setSelectedDay(null) }} className="px-3 py-1 border rounded">Close</button>
-                </div>
-              </div>
+              )}
 
-              <div className="grid md:grid-cols-3 gap-4 mt-4">
-                <div className="md:col-span-2 space-y-3">
-                  {(selectedDay.shifts || []).map((s, idx) => (
-                    <div key={idx} className="border rounded p-3">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <div className="font-medium">{s.shift_type || s.type || s.shiftType || 'Shift'} — {s.department?.name || s.department || 'Dept'}</div>
-                          <div className="text-xs text-gray-500">{(s.start_time && s.end_time) ? `${s.start_time} - ${s.end_time}` : ''}</div>
-                        </div>
-                        <div className="text-sm text-gray-500">{(() => { const c = toNumber(s.coverage ?? s.coverage_rate ?? s.metrics?.coverage); return c == null ? '—' : `${c}%` })()}</div>
-                      </div>
-
-                      <div className="mt-3">
-                        <div className="text-xs text-gray-500">Assigned</div>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {(() => {
-                            // Try multiple possible field names for assignments
-                            const assignments = s.assignments || s.assigned_staff || s.staff_assignments || s.employees || []
-                            const assignmentArray = Array.isArray(assignments) ? assignments : []
-
-                            if (assignmentArray.length > 0) {
-                              return assignmentArray.map((a, i2) => (
-                                <button
-                                  key={i2}
-                                  onClick={() => openStaffDetail(a, selectedDay.date)}
-                                  className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 rounded text-xs border"
-                                >
-                                  {a.full_name || a.name || a.employee_name || a.employee_id || a.staff_name || a.id || 'Staff'}
-                                </button>
-                              ))
-                            }
-
-                            // Check if there's an assigned_count or similar field
-                            const assignedCount = s.assigned_count || s.staff_count || s.coverage_count
-                            if (assignedCount > 0) {
-                              return <div className="text-sm text-gray-600">{assignedCount} staff assigned (details not loaded)</div>
-                            }
-
-                            return <div className="text-sm text-gray-500">No staff assigned</div>
-                          })()}
-                        </div>
-                      </div>
-
-                      <div className="mt-3 text-xs text-gray-500">
-                        {s.metrics?.notes || s.notes || ''}
+              {/* Modal content */}
+              {!dayModalLoading && selectedDay && (
+                <>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900">Shifts for {selectedDay.date}</h3>
+                      <div className="text-sm text-gray-500 mt-1">
+                        {(scheduleMap[selectedDay.date] || []).length} shift(s) • {(() => {
+                          const arr = scheduleMap[selectedDay.date] || []
+                          if (arr.length === 0) return 'No shifts'
+                          const covs = arr.map(x => toNumber(x.coverage ?? x.coverage_rate ?? x.metrics?.coverage)).filter(v => v != null)
+                          const avg = covs.length ? (covs.reduce((a, b) => a + b, 0) / covs.length) : null
+                          return avg == null ? 'Avg coverage: N/A' : `Avg coverage: ${avg.toFixed(1)}%`
+                        })()}
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                <div className="space-y-3">
-                  <div className="p-3 border rounded">
-                    <div className="text-xs text-gray-500">Day totals</div>
-                    <div className="font-medium mt-1">{(selectedDay.shifts || []).length} shifts</div>
-                    <div className="text-sm text-gray-500 mt-1">Coverage: {(() => {
-                      const arr = selectedDay.shifts || []
-                      if (!arr.length) return '—'
-                      const covs = arr.map(x => toNumber(x.coverage || x.coverage_rate || x.metrics?.coverage)).filter(v => v != null)
-                      const avg = covs.length ? (covs.reduce((a, b) => a + b, 0) / covs.length) : null
-                      return avg == null ? '—' : `${avg.toFixed(1)}%`
-                    })()}</div>
-                    <div className="text-sm text-gray-500 mt-1">Cost (est): {(() => {
-                      const arr = selectedDay.shifts || []
-                      const sum = arr.reduce((acc, x) => acc + (toNumber(x.metrics?.estimated_cost) || toNumber(x.estimated_cost) || 0), 0)
-                      return sum > 0 ? fmtCurrency(sum) : '—'
-                    })()}</div>
-                  </div>
-
-                  <div className="p-3 border rounded">
-                    <div className="text-xs text-gray-500">Actions</div>
-                    <div className="mt-2 flex gap-2">
-                      <button className="px-2 py-1 border rounded text-xs">Auto-fill understaffed</button>
-                      <button className="px-2 py-1 bg-indigo-600 text-white rounded text-xs">Run schedule for day</button>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setDayModalOpen(false); setSelectedDay(null) }} className="px-3 py-1 border rounded">Close</button>
                     </div>
                   </div>
 
-                  <div className="p-3 border rounded">
-                    <div className="text-xs text-gray-500">Flags</div>
-                    {
-                      (() => {
-                        const shifts = selectedDay.shifts || []
-                        if (shifts.length === 0) return <div className="text-sm text-gray-500 mt-2">No shifts scheduled</div>
+                  <div className="mt-4">
+                    <div className="space-y-3">
+                      {(selectedDay.shifts || []).map((s, idx) => (
+                        <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <div className="font-semibold text-lg text-gray-900">{s.shift_type || s.type || s.shiftType || 'Shift'}</div>
+                                <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">{s.department?.name || s.department || 'Dept'}</span>
+                              </div>
+                              {(s.start_time && s.end_time) && (
+                                <div className="text-sm text-gray-600 mt-1">⏰ {s.start_time} - {s.end_time}</div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-gray-900">{(() => {
+                                const c = toNumber(s.coverage ?? s.coverage_rate ?? s.metrics?.coverage)
+                                const assignedCount = s.assignments?.length || s.assigned_count || 0
+                                const requiredCount = s.requirements?.min_staff || s.required || s.min_staff || 1
+                                const coverage = c ?? ((assignedCount / requiredCount) * 100)
+                                return Math.min(100, coverage).toFixed(0)
+                              })()}%</div>
+                              <div className="text-xs text-gray-500">Coverage</div>
+                            </div>
+                          </div>
 
-                        const coverages = shifts.map(s => toNumber(s.coverage || s.coverage_rate || s.metrics?.coverage)).filter(v => v != null)
-                        const avgCoverage = coverages.length > 0 ? coverages.reduce((a, b) => a + b, 0) / coverages.length : 100
+                          <div className="mt-4 border-t border-gray-100 pt-3">
+                            <div className="text-xs font-medium text-gray-700 mb-2">👥 Assigned Staff</div>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {(() => {
+                                // Try multiple possible field names for assignments
+                                const assignments = s.assignments || s.assigned_staff || s.staff_assignments || s.employees || []
+                                const assignmentArray = Array.isArray(assignments) ? assignments : []
 
-                        if (avgCoverage <= 20) return <div className="text-sm text-red-600 mt-2">Critical coverage ({avgCoverage.toFixed(0)}%)</div>
-                        if (avgCoverage <= 70) return <div className="text-sm text-yellow-600 mt-2">Low coverage ({avgCoverage.toFixed(0)}%)</div>
-                        return <div className="text-sm text-green-600 mt-2">Good coverage ({avgCoverage.toFixed(0)}%)</div>
-                      })()
-                    }
+                                if (assignmentArray.length > 0) {
+                                  return assignmentArray.map((a, i2) => (
+                                    <button
+                                      key={i2}
+                                      onClick={() => openStaffDetail(a, selectedDay.date)}
+                                      className="px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 rounded-md text-sm font-medium border border-indigo-300 transition-colors shadow-sm hover:shadow"
+                                    >
+                                      {a.full_name || a.name || a.employee_name || a.employee_id || a.staff_name || a.id || 'Staff'}
+                                    </button>
+                                  ))
+                                }
+
+                                // Check if there's an assigned_count or similar field
+                                const assignedCount = s.assigned_count || s.staff_count || s.coverage_count
+                                if (assignedCount > 0) {
+                                  return <div className="text-sm text-gray-600">{assignedCount} staff assigned (details not loaded)</div>
+                                }
+
+                                return <div className="text-sm text-gray-500">No staff assigned</div>
+                              })()}
+                            </div>
+                          </div>
+
+                          <div className="mt-3 text-xs text-gray-500">
+                            {s.metrics?.notes || s.notes || ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-3">
+
+
+
+
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
 
             </div>
           </div>
         )}
 
         {/* Staff modal - improved mapping for assignments, skills, preferences, performance */}
-        {staffModalOpen && staffDetail && (
+        {staffModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black opacity-30" onClick={() => { setStaffModalOpen(false); setStaffDetail(null) }} />
+            <div className="absolute inset-0 bg-black opacity-30" onClick={() => { if (!staffModalLoading) { setStaffModalOpen(false); setStaffDetail(null) } }} />
             <div className="relative bg-white w-11/12 md:w-2/3 max-h-[80vh] overflow-auto rounded shadow-lg p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-xl font-semibold">{staffDetail.full_name || staffDetail.name || staffDetail.employee_id}</h3>
-                  <div className="text-sm text-gray-500 mt-1">{staffDetail.job_title || staffDetail.role || staffDetail.position || ''}</div>
-                  <div className="text-xs text-gray-500 mt-1">{staffDetail.department?.name || (staffDetail.department && staffDetail.department) || ''}</div>
-                  {staffDetail._isDailyView && <div className="text-xs text-indigo-600 mt-1 font-medium">View for {staffDetail._date}</div>}
-                </div>
-                <div>
-                  <button onClick={() => { setStaffModalOpen(false); setStaffDetail(null) }} className="px-3 py-1 border rounded">Close</button>
-                </div>
-              </div>
-
-              {/* Daily View vs Period View */}
-              {staffDetail._isDailyView ? (
-                <div className="mt-4 p-4 bg-indigo-50 rounded">
-                  <h4 className="font-semibold text-sm mb-3">Daily Summary for {staffDetail._date}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-xs text-gray-500">Hours worked today</div>
-                      <div className="font-medium text-lg">{staffDetail.daily_hours || 0} hrs</div>
-
-                      <div className="text-xs text-gray-500 mt-3">Shifts today</div>
-                      <div className="font-medium">{staffDetail.daily_shifts || 0} shift(s)</div>
-
-                      <div className="text-xs text-gray-500 mt-3">Departments</div>
-                      <div className="text-sm">
-                        {[...new Set(staffDetail.shift_details?.map(s => s.department?.name).filter(Boolean))].join(', ') || '-'}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-gray-500">Skills utilized today</div>
-                      <div className="mt-1 space-y-1">
-                        {staffDetail.daily_skills?.length ? staffDetail.daily_skills.map((s, i) => (<div key={i} className="text-sm bg-white px-2 py-1 rounded inline-block mr-1 mb-1">{s}</div>)) : <div className="text-sm text-gray-500">No special skills today</div>}
-                      </div>
-
-                      <div className="text-xs text-gray-500 mt-3">Shift types</div>
-                      <div className="text-sm">
-                        {[...new Set(staffDetail.shift_details?.map(s => s.type).filter(Boolean))].join(', ') || '-'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <div className="text-xs text-gray-500">Total hours (period)</div>
-                    <div className="font-medium">{staffDetail.total_hours ? `${fmtNumber(staffDetail.total_hours)} hrs` : (staffDetail.assignments?.total_hours ? fmtHours(staffDetail.assignments.total_hours) : '—')}</div>
-
-                    <div className="text-xs text-gray-500 mt-3">Overtime</div>
-                    <div className="font-medium">{staffDetail.overtime_hours ? `${fmtNumber(staffDetail.overtime_hours)} hrs` : (staffDetail.assignments?.overtime_hours ? fmtHours(staffDetail.assignments.overtime_hours) : '0 hrs')}</div>
-
-                    <div className="text-xs text-gray-500 mt-3">Assigned shifts</div>
-                    <div className="font-medium">{staffDetail.assigned_shifts ? staffDetail.assigned_shifts : (staffDetail.assignments?.total_shifts ? staffDetail.assignments.total_shifts : '—')}</div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-gray-500">Skills</div>
-                    <div className="mt-2 space-y-1">
-                      {/* Support either skills object or skills.proficient array */}
-                      {staffDetail.skills ? (
-                        // If skills.proficient exist, show them; else list keys
-                        Array.isArray(staffDetail.skills.proficient) ? staffDetail.skills.proficient.map((s, i) => (<div key={i} className="text-sm">{s}</div>)) :
-                          Object.keys(staffDetail.skills).map((k, i) => (<div key={i} className="text-sm">{k} • {JSON.stringify(staffDetail.skills[k])}</div>))
-                      ) : <div className="text-sm text-gray-500">No skills listed</div>}
-                    </div>
-
-                    <div className="text-xs text-gray-500 mt-3">Preferences</div>
-                    <div className="text-sm text-gray-700 mt-1">
-                      Preferred shifts: {(staffDetail.preferences?.preferred_shifts || []).join(', ') || '-'} <br />
-                      Preferred %: {staffDetail.preferences?.preferred_percentage != null ? `${staffDetail.preferences.preferred_percentage}%` : (staffDetail.preferences?.preferred_percentage === 0 ? '0%' : '-')} <br />
-                      Satisfaction: {staffDetail.preferences?.satisfaction_score != null ? `${staffDetail.preferences.satisfaction_score}%` : '-'}
-                    </div>
-                  </div>
+              {/* Loading indicator */}
+              {staffModalLoading && !staffDetail && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <span className="ml-3 text-gray-600">Loading staff details...</span>
                 </div>
               )}
 
-              {/* Show shift details for daily view */}
-              {staffDetail._isDailyView && staffDetail.shift_details && (
-                <div className="mt-4">
-                  <h4 className="font-semibold text-sm mb-2">Shift Details</h4>
-                  <div className="space-y-2">
-                    {staffDetail.shift_details.map((shift, i) => (
-                      <div key={i} className="p-3 border rounded bg-gray-50">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-medium text-sm">{shift.type} Shift</div>
-                            <div className="text-xs text-gray-500">{shift.department?.name}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium">{shift.hours} hrs</div>
-                            <div className="text-xs text-gray-500">{shift.coverage}/{shift.required} staff</div>
-                          </div>
-                        </div>
-                        {shift.assignment && (
-                          <div className="mt-2 text-xs text-gray-600">
-                            Match Score: {shift.assignment.match_score || '-'}
-                            {shift.assignment.is_supervisor && <span className="ml-2 px-2 py-0.5 bg-purple-100 rounded">Supervisor</span>}
-                          </div>
+              {/* Modal content */}
+              {!staffModalLoading && staffDetail && (
+                <>
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900">{staffDetail.full_name || staffDetail.name || staffDetail.employee_id}</h3>
+                      <div className="flex items-center gap-2 mt-2">
+                        {(staffDetail.job_title || staffDetail.role || staffDetail.position) && (
+                          <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">STAFF</span>
+                        )}
+                        {(staffDetail.department?.name || staffDetail.department) && (
+                          <span className="px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded-full">{staffDetail.department?.name || staffDetail.department}</span>
                         )}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Performance & Recommendations - only show for period view or if performance data exists */}
-              {(!staffDetail._isDailyView || staffDetail.performance) && (
-                <div className="mt-4">
-                  <h4 className="font-semibold">Performance & Recommendations</h4>
-                  <div className="mt-2 text-sm text-gray-700">
-                    Avg assignment score: {staffDetail.performance?.avg_assignment_score != null ? fmtNumber(staffDetail.performance.avg_assignment_score) : (staffDetail.performance?.avg_assignment_score === 0 ? '0' : '-')} <br />
-                    Supervisor assignments: {staffDetail.performance?.supervisor_assignments ?? (staffDetail.performance?.supervisor_assignments === 0 ? 0 : '-')} <br />
-                    Critical shifts: {staffDetail.performance?.critical_shifts ?? '-'}
+                      {staffDetail._isDailyView && <div className="text-sm text-indigo-600 mt-2 font-medium">Daily view for {staffDetail._date}</div>}
+                    </div>
+                    <button onClick={() => { setStaffModalOpen(false); setStaffDetail(null) }} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-medium">Close</button>
                   </div>
 
-                  <div className="mt-3 space-y-2">
-                    {(staffDetail.performance?.recommendations || []).map((r, i) => (
-                      <div key={i} className="p-2 border rounded">
-                        <div className="text-xs text-gray-500">{r.type} • <span className="font-semibold">{r.priority}</span></div>
-                        <div className="text-sm mt-1">{r.message}</div>
+                  {/* Daily View vs Period View */}
+                  {staffDetail._isDailyView ? (
+                    <div className="mt-6 p-6 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg border border-indigo-100">
+                      <h4 className="font-bold text-lg text-gray-900 mb-4">Daily Summary for {staffDetail._date}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-xs text-gray-500">Hours worked today</div>
+                          <div className="font-medium text-lg">{staffDetail.daily_hours || 0} hrs</div>
+
+                          <div className="text-xs text-gray-500 mt-3">Shifts today</div>
+                          <div className="font-medium">{staffDetail.daily_shifts || 0} shift(s)</div>
+
+                          <div className="text-xs text-gray-500 mt-3">Departments</div>
+                          <div className="text-sm">
+                            {[...new Set(staffDetail.shift_details?.map(s => s.department?.name).filter(Boolean))].join(', ') || '-'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs text-gray-500">Skills utilized today</div>
+                          <div className="mt-1 space-y-1">
+                            {staffDetail.daily_skills?.length ? staffDetail.daily_skills.map((s, i) => (<div key={i} className="text-sm bg-white px-2 py-1 rounded inline-block mr-1 mb-1">{s}</div>)) : <div className="text-sm text-gray-500">No special skills today</div>}
+                          </div>
+
+                          <div className="text-xs text-gray-500 mt-3">Shift types</div>
+                          <div className="text-sm">
+                            {[...new Set(staffDetail.shift_details?.map(s => s.type).filter(Boolean))].join(', ') || '-'}
+                          </div>
+                        </div>
                       </div>
-                    ))}
-                    {!(staffDetail.performance?.recommendations || []).length && <div className="text-sm text-gray-500">No recommendations</div>}
-                  </div>
-                </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <div className="text-xs text-gray-500">Total hours (period)</div>
+                        <div className="font-medium">{staffDetail.total_hours ? `${fmtNumber(staffDetail.total_hours)} hrs` : (staffDetail.assignments?.total_hours ? fmtHours(staffDetail.assignments.total_hours) : '—')}</div>
+
+                        <div className="text-xs text-gray-500 mt-3">Overtime</div>
+                        <div className="font-medium">{staffDetail.overtime_hours ? `${fmtNumber(staffDetail.overtime_hours)} hrs` : (staffDetail.assignments?.overtime_hours ? fmtHours(staffDetail.assignments.overtime_hours) : '0 hrs')}</div>
+
+                        <div className="text-xs text-gray-500 mt-3">Assigned shifts</div>
+                        <div className="font-medium">{staffDetail.assigned_shifts ? staffDetail.assigned_shifts : (staffDetail.assignments?.total_shifts ? staffDetail.assignments.total_shifts : '—')}</div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-gray-500">Skills</div>
+                        <div className="mt-2 space-y-1">
+                          {/* Support either skills object or skills.proficient array */}
+                          {staffDetail.skills ? (
+                            // If skills.proficient exist, show them; else list keys
+                            Array.isArray(staffDetail.skills.proficient) ? staffDetail.skills.proficient.map((s, i) => (<div key={i} className="text-sm">{s}</div>)) :
+                              Object.keys(staffDetail.skills).map((k, i) => (<div key={i} className="text-sm">{k} • {JSON.stringify(staffDetail.skills[k])}</div>))
+                          ) : <div className="text-sm text-gray-500">No skills listed</div>}
+                        </div>
+
+                        <div className="text-xs text-gray-500 mt-3">Preferences</div>
+                        <div className="text-sm text-gray-700 mt-1">
+                          Preferred shifts: {(staffDetail.preferences?.preferred_shifts || []).join(', ') || '-'} <br />
+                          Preferred %: {staffDetail.preferences?.preferred_percentage != null ? `${staffDetail.preferences.preferred_percentage}%` : (staffDetail.preferences?.preferred_percentage === 0 ? '0%' : '-')} <br />
+                          Satisfaction: {staffDetail.preferences?.satisfaction_score != null ? `${staffDetail.preferences.satisfaction_score}%` : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show shift details for daily view */}
+                  {staffDetail._isDailyView && staffDetail.shift_details && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-sm mb-2">Shift Details</h4>
+                      <div className="space-y-2">
+                        {staffDetail.shift_details.map((shift, i) => (
+                          <div key={i} className="p-3 border rounded bg-gray-50">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="font-medium text-sm">{shift.type} Shift</div>
+                                <div className="text-xs text-gray-500">{shift.department?.name}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-medium">{shift.hours} hrs</div>
+                                <div className="text-xs text-gray-500">{shift.coverage}/{shift.required} staff</div>
+                              </div>
+                            </div>
+                            {shift.assignment && (
+                              <div className="mt-2 text-xs text-gray-600">
+                                Match Score: {shift.assignment.match_score || '-'}
+                                {shift.assignment.is_supervisor && <span className="ml-2 px-2 py-0.5 bg-purple-100 rounded">Supervisor</span>}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Performance & Recommendations - only show for period view or if performance data exists */}
+                  {(!staffDetail._isDailyView || staffDetail.performance) && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold">Performance & Recommendations</h4>
+                      <div className="mt-2 text-sm text-gray-700">
+                        Avg assignment score: {staffDetail.performance?.avg_assignment_score != null ? fmtNumber(staffDetail.performance.avg_assignment_score) : (staffDetail.performance?.avg_assignment_score === 0 ? '0' : '-')} <br />
+                        Supervisor assignments: {staffDetail.performance?.supervisor_assignments ?? (staffDetail.performance?.supervisor_assignments === 0 ? 0 : '-')} <br />
+                        Critical shifts: {staffDetail.performance?.critical_shifts ?? '-'}
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {(staffDetail.performance?.recommendations || []).map((r, i) => (
+                          <div key={i} className="p-2 border rounded">
+                            <div className="text-xs text-gray-500">{r.type} • <span className="font-semibold">{r.priority}</span></div>
+                            <div className="text-sm mt-1">{r.message}</div>
+                          </div>
+                        ))}
+                        {!(staffDetail.performance?.recommendations || []).length && <div className="text-sm text-gray-500">No recommendations</div>}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
             </div>

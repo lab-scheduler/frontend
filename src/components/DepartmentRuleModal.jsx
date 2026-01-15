@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
-export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, departments, skills }) {
-    const [formData, setFormData] = useState(rule || {
+export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, departments, skills, staff, staffSkills }) {
+    // Initialize with defaults - will be overwritten by useEffect when rule changes
+    const [formData, setFormData] = useState({
         department_id: '',
         required_skill_ids: [],
         shift_types: ['DAY'],
@@ -14,6 +15,105 @@ export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, dep
     })
 
     const [errors, setErrors] = useState({})
+
+    // CRITICAL FIX: Sync formData with rule prop when it changes
+    // This fixes the bug where configuration disappears when clicking edit
+    useEffect(() => {
+        if (rule) {
+            // Deep clone the rule to avoid reference issues
+            setFormData({
+                department_id: rule.department_id || '',
+                required_skill_ids: rule.required_skill_ids || [],
+                shift_types: rule.shift_types || ['DAY'],
+                min_staff: rule.min_staff ?? 1,
+                max_staff: rule.max_staff ?? 2,
+                priority: rule.priority ?? 3,
+                estimated_hours: rule.estimated_hours ?? 8,
+                recurrence_days: rule.recurrence_days || [0, 1, 2, 3, 4],
+                notes: rule.notes || ''
+            })
+        } else {
+            // Reset to defaults when adding new rule
+            setFormData({
+                department_id: '',
+                required_skill_ids: [],
+                shift_types: ['DAY'],
+                min_staff: 1,
+                max_staff: 2,
+                priority: 3,
+                estimated_hours: 8,
+                recurrence_days: [0, 1, 2, 3, 4],
+                notes: ''
+            })
+        }
+    }, [rule, isOpen])
+
+    // Calculate staff availability for selected skills
+    // Staff are assigned to skills via the staffSkills cache: {employee_id: [skill_ids]}
+    const getStaffCountForSkill = (skillId) => {
+        if (!staff || !Array.isArray(staff) || !staffSkills) {
+            return 0
+        }
+
+        // Count staff who have this skill using the cached staffSkills data
+        const count = staff.filter(s => {
+            // Use employee_id first, then id as fallback
+            const staffId = s.employee_id || s.id
+            const skillIds = staffSkills[staffId] || []
+            // Handle both number and string skill IDs
+            return skillIds.some(id => String(id) === String(skillId) || Number(id) === Number(skillId))
+        }).length
+
+        return count
+    }
+
+    // Get staff names for a specific skill (for detailed view)
+    const getStaffForSkill = (skillId) => {
+        if (!staff || !Array.isArray(staff) || !staffSkills) return []
+        return staff.filter(s => {
+            const staffId = s.employee_id || s.id
+            const skillIds = staffSkills[staffId] || []
+            return skillIds.some(id => String(id) === String(skillId) || Number(id) === Number(skillId))
+        }).map(s => s.full_name || s.name || s.employee_id || 'Unknown')
+    }
+
+    // Get staff with ALL selected skills (intersection)
+    const getStaffWithAllSelectedSkills = () => {
+        if (!staff || !Array.isArray(staff) || !staffSkills || formData.required_skill_ids.length === 0) {
+            return []
+        }
+
+        const result = staff.filter(s => {
+            const staffId = s.employee_id || s.id
+            const skillIds = staffSkills[staffId] || []
+
+            // Check if staff has ALL required skills (handle type conversion)
+            return formData.required_skill_ids.every(requiredSkillId =>
+                skillIds.some(id => String(id) === String(requiredSkillId) || Number(id) === Number(requiredSkillId))
+            )
+        })
+
+        return result
+    }
+
+    // Get staff with ANY of the selected skills (union)
+    const getStaffWithAnySelectedSkill = () => {
+        if (!staff || !Array.isArray(staff) || !staffSkills || formData.required_skill_ids.length === 0) {
+            return []
+        }
+
+        const result = staff.filter(s => {
+            const staffId = s.employee_id || s.id
+            const skillIds = staffSkills[staffId] || []
+
+            // Check if staff has ANY of the required skills
+            return formData.required_skill_ids.some(requiredSkillId =>
+                skillIds.some(id => String(id) === String(requiredSkillId) || Number(id) === Number(requiredSkillId))
+            )
+        })
+
+        return result
+    }
 
     const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     const shiftTypes = ['DAY', 'EVENING', 'NIGHT']
@@ -213,6 +313,100 @@ export default function DepartmentRuleModal({ isOpen, onClose, onSave, rule, dep
                             </select>
                         </div>
                     </div>
+
+                    {/* Staff Availability Info */}
+                    {formData.department_id && (
+                        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    <h3 className="font-semibold text-blue-900">Staff Availability by Skill</h3>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const detailSection = document.getElementById('staff-detail-section')
+                                        detailSection?.classList.toggle('hidden')
+                                    }}
+                                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                                >
+                                    {formData.required_skill_ids.length > 0 ? 'Show Staff Details ▼' : 'Select skills to see details'}
+                                </button>
+                            </div>
+
+                            {/* Summary */}
+                            <div className="grid md:grid-cols-2 gap-4 text-sm mb-3">
+                                {formData.required_skill_ids.length === 0 ? (
+                                    <div className="text-gray-600 italic">
+                                        Select skills below to see available staff
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <span className="text-gray-600">Staff with ANY selected skill:</span>
+                                            <span className="ml-2 font-semibold text-blue-700">{getStaffWithAnySelectedSkill().length} staff</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-600">Staff with ALL selected skills:</span>
+                                            <span className="ml-2 font-semibold text-indigo-700">{getStaffWithAllSelectedSkills().length} staff</span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Individual skill breakdown */}
+                            {formData.required_skill_ids.length > 0 && (
+                                <div className="mb-3">
+                                    <div className="text-xs text-gray-600 mb-2">Staff per skill:</div>
+                                    <div className="grid md:grid-cols-3 gap-2">
+                                        {formData.required_skill_ids.map(skillId => {
+                                            const skill = skills.find(s => s.id === skillId)
+                                            const count = getStaffCountForSkill(skillId)
+                                            return (
+                                                <div key={skillId} className="bg-white px-3 py-2 rounded border border-gray-200">
+                                                    <div className="font-medium text-sm text-gray-800">{skill?.skill_name || 'Unknown'}</div>
+                                                    <div className={`text-lg font-bold ${count >= formData.min_staff ? 'text-green-600' : 'text-orange-600'}`}>
+                                                        {count} staff
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Detailed staff list (collapsible) */}
+                            {formData.required_skill_ids.length > 0 && (
+                                <div id="staff-detail-section" className="hidden">
+                                    <div className="border-t border-blue-200 pt-3 mt-3">
+                                        <div className="text-xs font-semibold text-gray-700 mb-2">Staff with ALL selected skills:</div>
+                                        {getStaffWithAllSelectedSkills().length > 0 ? (
+                                            <div className="flex flex-wrap gap-2">
+                                                {getStaffWithAllSelectedSkills().map(s => (
+                                                    <span key={s.employee_id || s.id} className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                        {s.full_name || s.name || s.employee_id}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-xs text-orange-600 italic">No staff have all selected skills</div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Warning for insufficient staff */}
+                            {formData.required_skill_ids.length > 0 && getStaffWithAllSelectedSkills().length < formData.min_staff && (
+                                <div className="mt-3 p-2 bg-orange-100 border border-orange-300 rounded-md">
+                                    <p className="text-xs text-orange-800">
+                                        ⚠️ Warning: You require {formData.min_staff} staff but only {getStaffWithAllSelectedSkills().length} staff have all selected skills.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Staffing */}
                     <div className="grid md:grid-cols-3 gap-4">

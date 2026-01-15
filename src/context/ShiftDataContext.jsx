@@ -40,27 +40,56 @@ export function ShiftDataProvider({ children }) {
 
     try {
       setLoading(true)
-      const response = await apiFetch(`/api/v1/${ORG_SLUG}/shifts?start_date=${startDate}&end_date=${endDate}`, {}, token)
 
-      // Normalize response - handle various formats
-      let shifts = []
-      if (Array.isArray(response)) {
-        shifts = response
-      } else if (response && typeof response === 'object') {
-        // Try common response formats
-        shifts = response.shifts || response.data || response.items || []
+      // Fetch all pages if pagination is present
+      let allShifts = []
+      let skip = 0
+      let hasMore = true
+      const limit = 50 // API default limit
+
+      while (hasMore) {
+        const url = `/api/v1/${ORG_SLUG}/shifts?start_date=${startDate}&end_date=${endDate}&skip=${skip}&limit=${limit}`
+        const response = await apiFetch(url, {}, token)
+
+        // Normalize response - handle various formats
+        let shifts = []
+        if (Array.isArray(response)) {
+          shifts = response
+          hasMore = false // No pagination info, assume single page
+        } else if (response && typeof response === 'object') {
+          // Try common response formats
+          shifts = response.shifts || response.data || response.items || []
+
+          // Check for pagination
+          if (response.pagination) {
+            hasMore = response.pagination.has_more || false
+            skip += limit
+          } else {
+            hasMore = false
+          }
+        } else {
+          hasMore = false
+        }
+
+        // Ensure we have an array
+        if (!Array.isArray(shifts)) {
+          console.warn('Shifts API returned non-array response:', response)
+          shifts = []
+        }
+
+        allShifts = [...allShifts, ...shifts]
+
+        // Safety check: prevent infinite loop
+        if (skip > 1000) {
+          console.warn('Pagination limit reached (1000 shifts), stopping fetch')
+          hasMore = false
+        }
       }
 
-      // Ensure we always return an array
-      if (!Array.isArray(shifts)) {
-        console.warn('Shifts API returned non-array response:', response)
-        shifts = []
-      }
+      // Cache the complete result
+      setShiftsCache(prev => new Map(prev).set(cacheKey, allShifts))
 
-      // Cache the normalized result
-      setShiftsCache(prev => new Map(prev).set(cacheKey, shifts))
-
-      return shifts
+      return allShifts
     } catch (error) {
       console.error('Error fetching shifts:', error)
       return []

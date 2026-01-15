@@ -7,12 +7,15 @@ import ApplyTemplateModal from '../components/ApplyTemplateModal'
 import DepartmentRuleModal from '../components/DepartmentRuleModal'
 import { apiFetch } from '../api/api'
 import { fetchTemplates, createTemplate, deleteTemplate, applyTemplate } from '../api/templateApi'
+import { deleteShiftsByRange } from '../api/shiftsApi'
 import { ORG_SLUG } from '../env'
 import { useAuth } from '../context/AuthContext'
+import { useShiftData } from '../context/ShiftDataContext'
 import { useNavigate } from 'react-router-dom'
 
 export default function Scheduler() {
     const { token } = useAuth()
+    const { clearCache } = useShiftData()
     const navigate = useNavigate()
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
@@ -21,6 +24,8 @@ export default function Scheduler() {
     // Data states
     const [departments, setDepartments] = useState([])
     const [skills, setSkills] = useState([])
+    const [staff, setStaff] = useState([]) // Staff list
+    const [staffSkills, setStaffSkills] = useState({}) // Cached staff skills {staff_id: [skill_ids]}
     const [templates, setTemplates] = useState([])
     const [loadingTemplates, setLoadingTemplates] = useState(false)
 
@@ -30,6 +35,7 @@ export default function Scheduler() {
     const [selectedTemplate, setSelectedTemplate] = useState(null)
     const [showTemplates, setShowTemplates] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
+    const [showAllHistory, setShowAllHistory] = useState(false) // For showing top 3 vs all history
 
     // Department rule modal states
     const [showRuleModal, setShowRuleModal] = useState(false)
@@ -68,16 +74,70 @@ export default function Scheduler() {
 
     async function loadData() {
         try {
-            const [deptRes, skillRes] = await Promise.all([
+            const [deptRes, skillRes, staffRes, staffSkillsRes] = await Promise.all([
                 apiFetch(`/api/v1/${ORG_SLUG}/departments`, {}, token),
-                apiFetch(`/api/v1/${ORG_SLUG}/skills`, {}, token)
+                apiFetch(`/api/v1/${ORG_SLUG}/skills`, {}, token),
+                apiFetch(`/api/v1/${ORG_SLUG}/staff`, {}, token),
+                apiFetch(`/api/v1/${ORG_SLUG}/staff-skills`, {}, token) // NEW: Get all staff skills in one call
             ])
 
-            setDepartments(deptRes?.departments || deptRes || [])
-            setSkills(skillRes?.skills || skillRes || [])
+            const deptData = deptRes?.departments || deptRes || []
+            const skillData = skillRes?.skills || skillRes || []
+            const staffData = staffRes?.staff || staffRes || []
+
+            setDepartments(deptData)
+            setSkills(skillData)
+            setStaff(staffData)
+
+            // Process staff skills response and cache it
+            processStaffSkillsResponse(staffSkillsRes)
         } catch (err) {
             setError(String(err))
         }
+    }
+
+    // NEW: Process the staff-skills response and cache it
+    function processStaffSkillsResponse(response) {
+        // Handle different response shapes
+        let staffSkillsList = []
+
+        // Case 1: Response is an array (flat array of staff-skill relationships)
+        if (Array.isArray(response)) {
+            staffSkillsList = response
+        }
+        // Case 2: Response has data property
+        else if (response?.data && Array.isArray(response.data)) {
+            staffSkillsList = response.data
+        }
+        // Case 3: Response has staff_skills property
+        else if (response?.staff_skills && Array.isArray(response.staff_skills)) {
+            staffSkillsList = response.staff_skills
+        }
+        // Case 4: Response has items property
+        else if (response?.items && Array.isArray(response.items)) {
+            staffSkillsList = response.items
+        }
+
+        // Build cache: { employee_id: [skill_ids] }
+        // The API returns a flat array where each item is one skill assignment:
+        // { id: 30, employee_id: "BD111", skill_id: 2, proficiency_level: "EXPERT" }
+        const skillsMap = {}
+        staffSkillsList.forEach(item => {
+            // Get the employee ID (this is the key field from the API)
+            const employeeId = item.employee_id || item.staff_id || item.staffId || item.id
+
+            // Get the skill ID
+            const skillId = item.skill_id || item.skillId || item.skill
+
+            if (employeeId && skillId !== undefined && skillId !== null) {
+                if (!skillsMap[employeeId]) {
+                    skillsMap[employeeId] = []
+                }
+                skillsMap[employeeId].push(skillId)
+            }
+        })
+
+        setStaffSkills(skillsMap)
     }
 
     async function loadTemplates() {
@@ -163,6 +223,24 @@ export default function Scheduler() {
             setSuccess(`Successfully generated ${result.summary?.total || 0} shifts`)
             setTimeout(() => navigate('/'), 2000)
         } catch (err) {
+            throw err
+        }
+    }
+
+    async function handleDeleteShifts(startDate, endDate) {
+        try {
+            setError(null)
+            const result = await deleteShiftsByRange(token, startDate, endDate)
+            const deletedCount = result?.deleted_count || result?.count || 0
+            setSuccess(`✅ Successfully deleted ${deletedCount} shift${deletedCount !== 1 ? 's' : ''} from ${startDate} to ${endDate}`)
+            setTimeout(() => setSuccess(null), 5000)
+
+            // Optionally reload templates to refresh any cached data
+            loadTemplates()
+        } catch (err) {
+            const errorMessage = err.message || String(err)
+            setError(`Failed to delete shifts: ${errorMessage}`)
+            setTimeout(() => setError(null), 5000)
             throw err
         }
     }
@@ -270,25 +348,18 @@ export default function Scheduler() {
 
     // Run Scheduler handler
     async function runEnhancedScheduler(params) {
-        console.log('🚀 Running scheduler with params:', params)
         setSchedulerLoading(true)
         setSchedulerResult(null)
         try {
             const { start_date, end_date } = params
-            console.log('📅 Date range:', start_date, 'to', end_date)
 
             // Check if shifts exist in the date range
-            console.log('🔍 Checking for shifts...')
             const shiftsCheck = await apiFetch(`/api/v1/${ORG_SLUG}/shifts?start_date=${start_date}&end_date=${end_date}`, {}, token)
-            console.log('📦 Raw API response:', shiftsCheck)
 
             // Extract shifts from response - API returns {ok: true, data: [...], pagination: {...}}
             const shifts = Array.isArray(shiftsCheck)
                 ? shiftsCheck
                 : (shiftsCheck?.data || shiftsCheck?.shifts || [])
-
-            console.log('📊 Parsed shifts:', shifts)
-            console.log('📊 Found shifts:', shifts.length)
 
             if (shifts.length === 0) {
                 setSchedulerResult({
@@ -301,12 +372,10 @@ export default function Scheduler() {
             }
 
             // Run the scheduler
-            console.log('⚡ Running scheduler API call...')
             const payload = {
                 start_date: start_date,
                 end_date: end_date
             }
-            console.log('📤 Payload:', payload)
 
             const response = await apiFetch(`/api/v1/${ORG_SLUG}/schedule/run`, {
                 method: 'POST',
@@ -316,7 +385,6 @@ export default function Scheduler() {
                 body: JSON.stringify(payload)
             }, token)
 
-            console.log('✅ Scheduler response:', response)
             setSchedulerResult(response)
 
             // Update the template/history with scheduler success status
@@ -386,6 +454,9 @@ export default function Scheduler() {
             }, token)
 
             setSuccess(`Successfully generated ${response.summary?.total || 0} shifts`)
+
+            // Auto-refresh shift data to show new shifts immediately
+            clearCache()
 
             // Auto-save to shift history with scheduler status
             const historyName = `Shifts ${formData.start_date} to ${formData.end_date}`
@@ -548,35 +619,65 @@ export default function Scheduler() {
                             <p className="text-sm text-gray-400">Your shift configurations will be automatically saved here after generation</p>
                         </div>
                     ) : (
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {templates
-                                .filter(t =>
-                                    searchQuery === '' ||
-                                    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                    (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()))
-                                )
-                                .map(template => (
-                                    <TemplateCard
-                                        key={template.id}
-                                        template={template}
-                                        onLoad={handleLoadTemplate}
-                                        onApply={(template) => {
-                                            setSelectedTemplate(template)
-                                            setShowApplyModal(true)
-                                        }}
-                                        onDelete={handleDeleteTemplate}
-                                        onRunScheduler={async (template) => {
-                                            if (template.config?.start_date && template.config?.end_date) {
-                                                setLastGeneratedRange({
-                                                    start_date: template.config.start_date,
-                                                    end_date: template.config.end_date
-                                                })
-                                                setShowSchedulerModal(true)
-                                            }
-                                        }}
-                                    />
-                                ))}
-                        </div>
+                        <>
+                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {templates
+                                    .filter(t =>
+                                        searchQuery === '' ||
+                                        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                        (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                                    )
+                                    .slice(0, showAllHistory || searchQuery !== '' ? undefined : 3)
+                                    .map(template => (
+                                        <TemplateCard
+                                            key={template.id}
+                                            template={template}
+                                            onLoad={handleLoadTemplate}
+                                            onApply={(template) => {
+                                                setSelectedTemplate(template)
+                                                setShowApplyModal(true)
+                                            }}
+                                            onDelete={handleDeleteTemplate}
+                                            onDeleteShifts={handleDeleteShifts}
+                                            onRunScheduler={async (template) => {
+                                                if (template.config?.start_date && template.config?.end_date) {
+                                                    setLastGeneratedRange({
+                                                        start_date: template.config.start_date,
+                                                        end_date: template.config.end_date
+                                                    })
+                                                    setShowSchedulerModal(true)
+                                                }
+                                            }}
+                                        />
+                                    ))}
+                            </div>
+
+                            {/* Show More/Less Button */}
+                            {!searchQuery && templates.length > 3 && (
+                                <div className="mt-4 text-center">
+                                    <button
+                                        onClick={() => setShowAllHistory(!showAllHistory)}
+                                        className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors flex items-center gap-2 mx-auto"
+                                    >
+                                        {showAllHistory ? (
+                                            <>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                                </svg>
+                                                Show Less
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                                Show {templates.length - 3} More
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </Card>
             )}
@@ -785,6 +886,8 @@ export default function Scheduler() {
                 rule={editingRuleIndex !== null ? formData.departments[editingRuleIndex] : null}
                 departments={departments}
                 skills={skills}
+                staff={staff}
+                staffSkills={staffSkills}
             />
 
             <TemplateModal

@@ -33,7 +33,6 @@ export default function DashboardV2() {
 
             // Check if we have valid cached data for this date range
             if (isCacheValid(dateRange)) {
-                console.log('📦 Using cached analytics data')
                 setSafetyData(getCachedData('safety'))
                 setAlertsData(getCachedData('alerts'))
                 setBurnoutData(getCachedData('burnout'))
@@ -44,7 +43,6 @@ export default function DashboardV2() {
                 return
             }
 
-            console.log('🔄 Fetching fresh analytics data')
             setLoading(true)
             setError(null)
 
